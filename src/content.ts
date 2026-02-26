@@ -327,7 +327,13 @@ async function annotateMarkdownSupportLinks() {
     document.querySelectorAll<HTMLAnchorElement>(".md-reader-content a[href]")
   );
 
-  const urls = anchors
+  const capabilityAnchors = anchors.filter((anchor) => {
+    const rawHref = anchor.getAttribute("href")?.trim() ?? "";
+    if (!rawHref || rawHref.startsWith("#")) return false;
+    return /^https?:\/\//i.test(anchor.href);
+  });
+
+  const urls = capabilityAnchors
     .map((anchor) => anchor.href)
     .filter((href) => /^https?:\/\//i.test(href));
 
@@ -344,7 +350,7 @@ async function annotateMarkdownSupportLinks() {
     return;
   }
 
-  for (const anchor of anchors) {
+  for (const anchor of capabilityAnchors) {
     let urlKey: string;
     try {
       const parsed = new URL(anchor.href);
