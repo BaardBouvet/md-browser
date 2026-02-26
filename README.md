@@ -11,6 +11,15 @@ Markdown Browser asks sites for `text/markdown` and renders a distraction-free r
 - One-click mode switching from the toolbar
 - Focused on Chromium browsers (Edge/Chrome)
 
+## Features
+
+- Markdown-first browsing via HTTP content negotiation
+- Clean reader rendering with optimized typography
+- Table of contents sidebar for document navigation
+- GitHub-style heading anchor links on hover
+- Link capability hints with optional background checks
+- Toolbar + popup controls to switch between markdown and original HTML
+
 ## Quick start
 
 Prerequisite: Docker.

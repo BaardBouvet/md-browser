@@ -6,6 +6,7 @@
 // ────────────────────────────────────────────────────────────────────────────
 
 import MarkdownIt from "markdown-it";
+import DOMPurify from "dompurify";
 import { api } from "./browser-api";
 
 // Reader CSS is imported as a text string (esbuild loader: text)
@@ -58,7 +59,7 @@ const md = new MarkdownIt({
   // ─── Parse and render ───────────────────────────────────────────────────
 
   const { frontmatter, body } = parseFrontmatter(rawMarkdown);
-  const renderedHTML = md.render(body);
+  const renderedHTML = sanitizeRenderedHtml(md.render(body));
   const title =
     frontmatter?.title || extractFirstHeading(body) || document.title || "Untitled";
 
@@ -154,6 +155,26 @@ function slugify(input: string): string {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+function sanitizeRenderedHtml(html: string): string {
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: [
+      "script",
+      "style",
+      "iframe",
+      "object",
+      "embed",
+      "form",
+      "input",
+      "button",
+      "textarea",
+      "select",
+      "option",
+    ],
+    FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "style"],
+  });
 }
 
 // ─── Render ─────────────────────────────────────────────────────────────────

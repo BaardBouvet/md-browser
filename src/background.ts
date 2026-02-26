@@ -92,12 +92,12 @@ async function refreshAllTabActionState() {
 async function getLinkCapabilityChecksEnabled(): Promise<boolean> {
   try {
     const raw = await (api.storage.local as typeof chrome.storage.local).get({
-      [LINK_CHECKS_STORAGE_KEY]: true,
+      [LINK_CHECKS_STORAGE_KEY]: false,
     });
     const value = (raw as Record<string, unknown>)[LINK_CHECKS_STORAGE_KEY];
     return value !== false;
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -150,7 +150,7 @@ if (hasDeclarativeNetRequest) {
       }
       return { requestHeaders: details.requestHeaders };
     },
-    { urls: ["<all_urls>"], types: ["main_frame"] },
+    { urls: ["http://*/*", "https://*/*"], types: ["main_frame"] },
     ["blocking", "requestHeaders"]
   );
   console.log("[md-browser] Accept header rewriting installed (webRequest)");
@@ -191,7 +191,7 @@ api.webRequest.onHeadersReceived.addListener(
       updateActionState(details.tabId);
     }
   },
-  { urls: ["<all_urls>"], types: ["main_frame"] },
+  { urls: ["http://*/*", "https://*/*"], types: ["main_frame"] },
   ["responseHeaders"]
 );
 
@@ -272,7 +272,7 @@ api.runtime.onMessage.addListener(
       case "GET_LINK_CHECKS_CONFIG": {
         getLinkCapabilityChecksEnabled()
           .then((enabled) => sendResponse({ enabled }))
-          .catch(() => sendResponse({ enabled: true }));
+          .catch(() => sendResponse({ enabled: false }));
         return true;
       }
 

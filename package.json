@@ -9,6 +9,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "dompurify": "^3.2.6",
     "markdown-it": "^14.1.0"
   },
   "devDependencies": {
