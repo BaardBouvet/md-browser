@@ -6,6 +6,7 @@
 // ────────────────────────────────────────────────────────────────────────────
 
 import MarkdownIt from "markdown-it";
+import { api } from "./browser-api";
 
 // Reader CSS is imported as a text string (esbuild loader: text)
 // @ts-expect-error - esbuild text loader
@@ -38,7 +39,7 @@ const md = new MarkdownIt({
   // Secondary detection: ask the background service worker
   let bgInfo: { isMarkdown?: boolean; tokens?: string } = {};
   try {
-    bgInfo = await chrome.runtime.sendMessage({ type: "CHECK_MARKDOWN" });
+    bgInfo = await api.runtime.sendMessage({ type: "CHECK_MARKDOWN" });
   } catch {
     // Background may not be ready (e.g., service worker still starting)
   }
@@ -203,7 +204,7 @@ function renderReaderView(opts: {
     ?.addEventListener("click", async () => {
       try {
         // Ask background to bypass the Accept header for this tab
-        await chrome.runtime.sendMessage({ type: "BYPASS_TAB" });
+        await api.runtime.sendMessage({ type: "BYPASS_TAB" });
       } catch {
         // Fallback: set a session flag
         sessionStorage.setItem("md-browser-bypass", window.location.href);

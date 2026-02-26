@@ -3,11 +3,14 @@
 # Runs npm / build commands inside a Docker container so you don't need
 # Node.js installed locally.
 # Usage:
-#   ./dev.sh install   — npm install
-#   ./dev.sh build     — build once
-#   ./dev.sh watch     — watch mode
-#   ./dev.sh shell     — interactive shell in container
-#   ./dev.sh <cmd>     — run arbitrary command
+#   ./dev.sh install            — npm install
+#   ./dev.sh build              — build both Chromium (Chrome/Edge) + Firefox
+#   ./dev.sh build --firefox    — build Firefox only
+#   ./dev.sh build --chromium   — build Chromium only
+#   ./dev.sh build --chrome     — build Chromium only (alias)
+#   ./dev.sh watch              — watch mode (both targets)
+#   ./dev.sh shell              — interactive shell in container
+#   ./dev.sh <cmd>              — run arbitrary command
 # ────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -20,10 +23,12 @@ case "${1:-build}" in
     $DOCKER_RUN "$IMAGE" npm install
     ;;
   build)
-    $DOCKER_RUN "$IMAGE" node build.mjs
+    shift || true
+    $DOCKER_RUN "$IMAGE" node build.mjs "$@"
     ;;
   watch)
-    $DOCKER_RUN -it "$IMAGE" node build.mjs --watch
+    shift || true
+    $DOCKER_RUN -it "$IMAGE" node build.mjs --watch "$@"
     ;;
   shell)
     $DOCKER_RUN -it "$IMAGE" bash

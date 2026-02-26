@@ -3,6 +3,11 @@ import { cpSync, mkdirSync, writeFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
 
 const watch = process.argv.includes("--watch");
+const target = process.argv.find(
+  (a) => a === "--firefox" || a === "--chromium" || a === "--chrome"
+);
+const buildChromium = !target || target === "--chromium" || target === "--chrome";
+const buildFirefox = !target || target === "--firefox";
 
 // ---------------------------------------------------------------------------
 // 1. Generate simple PNG icons (solid rounded-rect style)
@@ -94,21 +99,24 @@ function createIconPNG(size) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Prepare dist directory
+// 2. Prepare dist directories
 // ---------------------------------------------------------------------------
 
-mkdirSync("dist/icons", { recursive: true });
-mkdirSync("dist/popup", { recursive: true });
+function prepareDistDir(distDir, manifestSrc) {
+  mkdirSync(`${distDir}/icons`, { recursive: true });
+  mkdirSync(`${distDir}/popup`, { recursive: true });
 
-// Generate icons
-for (const size of [16, 48, 128]) {
-  writeFileSync(`dist/icons/icon${size}.png`, createIconPNG(size));
+  for (const size of [16, 48, 128]) {
+    writeFileSync(`${distDir}/icons/icon${size}.png`, createIconPNG(size));
+  }
+
+  cpSync(manifestSrc, `${distDir}/manifest.json`);
+  cpSync("src/popup/popup.html", `${distDir}/popup/popup.html`);
+  cpSync("src/popup/popup.css", `${distDir}/popup/popup.css`);
 }
 
-// Copy static files
-cpSync("src/manifest.json", "dist/manifest.json");
-cpSync("src/popup/popup.html", "dist/popup/popup.html");
-cpSync("src/popup/popup.css", "dist/popup/popup.css");
+if (buildChromium) prepareDistDir("dist/chromium", "src/manifest.json");
+if (buildFirefox) prepareDistDir("dist/firefox", "src/manifest.firefox.json");
 
 // ---------------------------------------------------------------------------
 // 3. Bundle TypeScript
@@ -122,12 +130,12 @@ const commonOptions = {
   logLevel: "info",
 };
 
-async function build() {
+async function buildTarget(distDir) {
   // Background service worker
   await esbuild.build({
     ...commonOptions,
     entryPoints: ["src/background.ts"],
-    outfile: "dist/background.js",
+    outfile: `${distDir}/background.js`,
     format: "iife",
   });
 
@@ -135,7 +143,7 @@ async function build() {
   await esbuild.build({
     ...commonOptions,
     entryPoints: ["src/content.ts"],
-    outfile: "dist/content.js",
+    outfile: `${distDir}/content.js`,
     format: "iife",
     loader: { ".css": "text" },
   });
@@ -144,38 +152,55 @@ async function build() {
   await esbuild.build({
     ...commonOptions,
     entryPoints: ["src/popup/popup.ts"],
-    outfile: "dist/popup/popup.js",
+    outfile: `${distDir}/popup/popup.js`,
     format: "iife",
   });
+}
 
-  console.log("✓ Build complete → dist/");
+async function build() {
+  if (buildChromium) {
+    await buildTarget("dist/chromium");
+    console.log("✓ Chromium (Chrome/Edge) build complete → dist/chromium/");
+  }
+  if (buildFirefox) {
+    await buildTarget("dist/firefox");
+    console.log("✓ Firefox build complete → dist/firefox/");
+  }
 }
 
 if (watch) {
-  // Watch mode: rebuild on changes
-  const contexts = await Promise.all([
-    esbuild.context({
-      ...commonOptions,
-      entryPoints: ["src/background.ts"],
-      outfile: "dist/background.js",
-      format: "iife",
-    }),
-    esbuild.context({
-      ...commonOptions,
-      entryPoints: ["src/content.ts"],
-      outfile: "dist/content.js",
-      format: "iife",
-      loader: { ".css": "text" },
-    }),
-    esbuild.context({
-      ...commonOptions,
-      entryPoints: ["src/popup/popup.ts"],
-      outfile: "dist/popup/popup.js",
-      format: "iife",
-    }),
-  ]);
-  await Promise.all(contexts.map((c) => c.watch()));
-  console.log("👀 Watching for changes...");
+  // Watch mode: rebuild on changes for all active targets
+  const targets = [];
+  if (buildChromium) targets.push("dist/chromium");
+  if (buildFirefox) targets.push("dist/firefox");
+
+  const contexts = [];
+  for (const distDir of targets) {
+    contexts.push(
+      esbuild.context({
+        ...commonOptions,
+        entryPoints: ["src/background.ts"],
+        outfile: `${distDir}/background.js`,
+        format: "iife",
+      }),
+      esbuild.context({
+        ...commonOptions,
+        entryPoints: ["src/content.ts"],
+        outfile: `${distDir}/content.js`,
+        format: "iife",
+        loader: { ".css": "text" },
+      }),
+      esbuild.context({
+        ...commonOptions,
+        entryPoints: ["src/popup/popup.ts"],
+        outfile: `${distDir}/popup/popup.js`,
+        format: "iife",
+      })
+    );
+  }
+  const resolved = await Promise.all(contexts);
+  await Promise.all(resolved.map((c) => c.watch()));
+  console.log(`👀 Watching for changes... (${targets.join(", ")})`);
 } else {
   await build();
 }

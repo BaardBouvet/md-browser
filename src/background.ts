@@ -6,7 +6,18 @@
 //   3. Set badge indicator on tabs that received markdown
 //   4. Handle messages from content script and popup
 //   5. Manage "bypass" rules for viewing original HTML
+//
+// Cross-browser: Chrome MV3 uses declarativeNetRequest for header rewriting
+// and webRequest for response observation. Firefox MV2 uses webRequest for
+// both header rewriting and response observation.
 // ────────────────────────────────────────────────────────────────────────────
+
+import { api, isFirefox, hasDeclarativeNetRequest } from "./browser-api";
+
+const ACCEPT_MARKDOWN =
+  "text/markdown, text/html;q=0.9, application/xhtml+xml;q=0.8, */*;q=0.7";
+const ACCEPT_HTML =
+  "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
 
 interface MarkdownTabInfo {
   url: string;
@@ -18,40 +29,72 @@ interface MarkdownTabInfo {
 // restarts, but the content script also detects via document.contentType.
 const markdownTabs = new Map<number, MarkdownTabInfo>();
 
-// ─── 1. Modify Accept headers via declarativeNetRequest ─────────────────────
+// Set of tab IDs that are in bypass mode (view original)
+const bypassedTabs = new Set<number>();
 
-chrome.runtime.onInstalled.addListener(async () => {
-  await chrome.declarativeNetRequest.updateDynamicRules({
-    removeRuleIds: [1],
-    addRules: [
-      {
-        id: 1,
-        priority: 1,
-        action: {
-          type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
-          requestHeaders: [
-            {
-              header: "Accept",
-              operation: chrome.declarativeNetRequest.HeaderOperation.SET,
-              value:
-                "text/markdown, text/html;q=0.9, application/xhtml+xml;q=0.8, */*;q=0.7",
-            },
-          ],
+// ─── Badge helper (browserAction on Firefox MV2, action on Chrome MV3) ─────
+
+const badge = isFirefox
+  ? (api as unknown as { browserAction: typeof chrome.action }).browserAction
+  : api.action;
+
+// ─── 1. Modify Accept headers ──────────────────────────────────────────────
+
+if (hasDeclarativeNetRequest) {
+  // Chrome MV3: declarativeNetRequest for the global rule
+  api.runtime.onInstalled.addListener(async () => {
+    await api.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: [1],
+      addRules: [
+        {
+          id: 1,
+          priority: 1,
+          action: {
+            type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
+            requestHeaders: [
+              {
+                header: "Accept",
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: ACCEPT_MARKDOWN,
+              },
+            ],
+          },
+          condition: {
+            resourceTypes: [
+              chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
+            ],
+          },
         },
-        condition: {
-          resourceTypes: [
-            chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
-          ],
-        },
-      },
-    ],
+      ],
+    });
+    console.log("[md-browser] Accept header rule installed (declarativeNetRequest)");
   });
-  console.log("[md-browser] Accept header rule installed");
-});
+} else {
+  // Firefox MV2: webRequest.onBeforeSendHeaders for header rewriting
+  api.webRequest.onBeforeSendHeaders.addListener(
+    (details) => {
+      if (!details.requestHeaders) return;
+
+      const value = bypassedTabs.has(details.tabId)
+        ? ACCEPT_HTML
+        : ACCEPT_MARKDOWN;
+
+      for (const header of details.requestHeaders) {
+        if (header.name.toLowerCase() === "accept") {
+          header.value = value;
+        }
+      }
+      return { requestHeaders: details.requestHeaders };
+    },
+    { urls: ["<all_urls>"], types: ["main_frame"] },
+    ["blocking", "requestHeaders"]
+  );
+  console.log("[md-browser] Accept header rewriting installed (webRequest)");
+}
 
 // ─── 2. Observe response headers ───────────────────────────────────────────
 
-chrome.webRequest.onHeadersReceived.addListener(
+api.webRequest.onHeadersReceived.addListener(
   (details) => {
     if (!details.responseHeaders || details.tabId < 0) return;
 
@@ -72,8 +115,8 @@ chrome.webRequest.onHeadersReceived.addListener(
       });
 
       // Set badge
-      chrome.action.setBadgeText({ text: "MD", tabId: details.tabId });
-      chrome.action.setBadgeBackgroundColor({
+      badge.setBadgeText({ text: "MD", tabId: details.tabId });
+      badge.setBadgeBackgroundColor({
         color: "#27AE60",
         tabId: details.tabId,
       });
@@ -85,7 +128,7 @@ chrome.webRequest.onHeadersReceived.addListener(
       // If this tab previously had markdown but now navigated to HTML, clear it
       if (markdownTabs.has(details.tabId)) {
         markdownTabs.delete(details.tabId);
-        chrome.action.setBadgeText({ text: "", tabId: details.tabId });
+        badge.setBadgeText({ text: "", tabId: details.tabId });
       }
     }
   },
@@ -95,7 +138,7 @@ chrome.webRequest.onHeadersReceived.addListener(
 
 // ─── 3. Message handling ────────────────────────────────────────────────────
 
-chrome.runtime.onMessage.addListener(
+api.runtime.onMessage.addListener(
   (
     message: { type: string; tabId?: number },
     sender,
@@ -130,8 +173,6 @@ chrome.runtime.onMessage.addListener(
       }
 
       case "BYPASS_TAB": {
-        // Add a high-priority session rule that restores the default Accept
-        // header for this specific tab, then reload.
         if (tabId != null) {
           bypassTab(tabId).then(() => sendResponse({ ok: true }));
           return true; // async
@@ -157,56 +198,65 @@ chrome.runtime.onMessage.addListener(
   }
 );
 
-// ─── 4. Tab-specific bypass rules ──────────────────────────────────────────
+// ─── 4. Tab-specific bypass ────────────────────────────────────────────────
 
-// Rule IDs for bypass: tabId + 10000 to avoid collision with the global rule
 function bypassRuleId(tabId: number) {
   return tabId + 10000;
 }
 
 async function bypassTab(tabId: number) {
-  await chrome.declarativeNetRequest.updateSessionRules({
-    removeRuleIds: [bypassRuleId(tabId)],
-    addRules: [
-      {
-        id: bypassRuleId(tabId),
-        priority: 2,
-        action: {
-          type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
-          requestHeaders: [
-            {
-              header: "Accept",
-              operation: chrome.declarativeNetRequest.HeaderOperation.SET,
-              value:
-                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            },
-          ],
-        },
-        condition: {
-          resourceTypes: [
-            chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
-          ],
-          tabIds: [tabId],
-        },
-      },
-    ],
-  });
+  bypassedTabs.add(tabId);
   markdownTabs.delete(tabId);
-  chrome.action.setBadgeText({ text: "", tabId });
+  badge.setBadgeText({ text: "", tabId });
+
+  if (hasDeclarativeNetRequest) {
+    // Chrome: session rule to override global rule for this tab
+    await api.declarativeNetRequest.updateSessionRules({
+      removeRuleIds: [bypassRuleId(tabId)],
+      addRules: [
+        {
+          id: bypassRuleId(tabId),
+          priority: 2,
+          action: {
+            type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
+            requestHeaders: [
+              {
+                header: "Accept",
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: ACCEPT_HTML,
+              },
+            ],
+          },
+          condition: {
+            resourceTypes: [
+              chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
+            ],
+            tabIds: [tabId],
+          },
+        },
+      ],
+    });
+  }
+  // Firefox: bypassedTabs set is checked in the onBeforeSendHeaders listener
 }
 
 async function removeBypass(tabId: number) {
-  await chrome.declarativeNetRequest.updateSessionRules({
-    removeRuleIds: [bypassRuleId(tabId)],
-  });
+  bypassedTabs.delete(tabId);
+  if (hasDeclarativeNetRequest) {
+    await api.declarativeNetRequest.updateSessionRules({
+      removeRuleIds: [bypassRuleId(tabId)],
+    });
+  }
 }
 
 // ─── 5. Cleanup ─────────────────────────────────────────────────────────────
 
-chrome.tabs.onRemoved.addListener((tabId) => {
+api.tabs.onRemoved.addListener((tabId) => {
   markdownTabs.delete(tabId);
-  // Clean up any session bypass rules
-  chrome.declarativeNetRequest.updateSessionRules({
-    removeRuleIds: [bypassRuleId(tabId)],
-  });
+  bypassedTabs.delete(tabId);
+  if (hasDeclarativeNetRequest) {
+    api.declarativeNetRequest.updateSessionRules({
+      removeRuleIds: [bypassRuleId(tabId)],
+    });
+  }
 });

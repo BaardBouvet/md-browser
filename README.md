@@ -8,7 +8,7 @@ When activated, md-browser adds `Accept: text/markdown` to navigational requests
 
 **v0.1.0 — MVP / Proof of Concept**
 
-- [x] Chrome Manifest V3 extension
+- [x] Chromium (Chrome/Edge) Manifest V3 + Firefox Manifest V2 extension
 - [x] Modifies `Accept` headers to request `text/markdown`
 - [x] Detects `text/markdown` responses and renders them in a reader view
 - [x] YAML frontmatter extraction (title, description)
@@ -18,7 +18,6 @@ When activated, md-browser adds `Accept: text/markdown` to navigational requests
 - [x] Badge indicator (`MD`) on tabs served as markdown
 - [ ] HTML-to-markdown fallback (Milestone 2)
 - [ ] Settings / options page (Milestone 3)
-- [ ] Firefox support (Milestone 4)
 
 ## Why an Extension?
 
@@ -76,8 +75,14 @@ You get noise-free reading when you want it, and the full web when you need it.
 # Install dependencies
 ./dev.sh install
 
-# Build the extension
+# Build both Chromium (Chrome/Edge) and Firefox extensions
 ./dev.sh build
+
+# Build only Chromium (Chrome/Edge)
+./dev.sh build --chromium
+
+# Build only Firefox
+./dev.sh build --firefox
 
 # Watch mode (rebuild on changes)
 ./dev.sh watch
@@ -86,13 +91,28 @@ You get noise-free reading when you want it, and the full web when you need it.
 ./dev.sh shell
 ```
 
+### Load in Firefox
+
+1. Build the extension (see above)
+2. Open `about:debugging#/runtime/this-firefox`
+3. Click **Load Temporary Add-on…**
+4. Select `dist/firefox/manifest.json`
+
+### Load in Edge
+
+1. Build the extension (see above)
+2. Open `edge://extensions/`
+3. Enable **Developer mode**
+4. Click **Load unpacked**
+5. Select the `dist/chromium/` directory
+
 ### Load in Chrome
 
 1. Build the extension (see above)
 2. Open `chrome://extensions/`
 3. Enable **Developer mode** (toggle in top-right)
 4. Click **Load unpacked**
-5. Select the `dist/` directory
+5. Select the `dist/chromium/` directory
 
 ### Test it
 
@@ -112,7 +132,7 @@ src/
   manifest.json       — Chrome MV3 extension manifest
   styles/reader.css   — Reader view typography (light/dark themes)
   popup/              — Extension popup (HTML, CSS, TS)
-dist/                 — Built extension (load this in Chrome)
+dist/                 — Built extension (load Chromium in Chrome/Edge, Firefox separately)
 docs/                 — Technical documentation
 plans/                — Development plan and milestones
 ```

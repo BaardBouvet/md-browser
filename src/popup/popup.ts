@@ -8,8 +8,12 @@ async function init() {
   const pageUrl = document.getElementById("page-url")!;
   const btnToggle = document.getElementById("btn-toggle") as HTMLButtonElement;
 
+  // Use browser.* on Firefox, chrome.* on Chrome
+  const _api: typeof chrome =
+    typeof browser !== "undefined" ? (browser as unknown as typeof chrome) : chrome;
+
   // Get current tab
-  const [tab] = await chrome.tabs.query({
+  const [tab] = await _api.tabs.query({
     active: true,
     currentWindow: true,
   });
@@ -19,7 +23,7 @@ async function init() {
   }
 
   // Query background for markdown status
-  const info = await chrome.runtime.sendMessage({
+  const info = await _api.runtime.sendMessage({
     type: "GET_TAB_INFO",
     tabId: tab.id,
   });
@@ -43,11 +47,11 @@ async function init() {
     btnToggle.hidden = false;
     btnToggle.textContent = "View original page";
     btnToggle.addEventListener("click", async () => {
-      await chrome.runtime.sendMessage({
+      await _api.runtime.sendMessage({
         type: "BYPASS_TAB",
         tabId: tab.id,
       });
-      await chrome.tabs.reload(tab.id!);
+      await _api.tabs.reload(tab.id!);
       window.close();
     });
   } else {
