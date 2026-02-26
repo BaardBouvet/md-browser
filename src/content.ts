@@ -62,12 +62,23 @@ const md = new MarkdownIt({
   const title =
     frontmatter?.title || extractFirstHeading(body) || document.title || "Untitled";
 
-  renderReaderView({ title, renderedHTML, rawMarkdown });
+  renderReaderView({ title, renderedHTML });
 
   if (document.documentElement) {
     document.documentElement.style.visibility = "";
   }
 })();
+
+api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === "GET_PAGE_SOURCE") {
+    sendResponse({
+      isMarkdownPage: document.contentType.includes("text/markdown"),
+      contentType: document.contentType,
+      url: location.href,
+    });
+  }
+  return false;
+});
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -150,9 +161,8 @@ function slugify(input: string): string {
 function renderReaderView(opts: {
   title: string;
   renderedHTML: string;
-  rawMarkdown: string;
 }) {
-  const { title, renderedHTML, rawMarkdown } = opts;
+  const { title, renderedHTML } = opts;
 
   // Build the reader page
   document.documentElement.innerHTML = /* html */ `
@@ -166,7 +176,6 @@ function renderReaderView(opts: {
       <aside id="md-toc" class="md-toc" aria-label="Table of contents">
         <div class="md-toc-head">
           <div class="md-toc-title">On this page</div>
-          <button id="md-toggle-raw" class="md-toggle-raw" type="button" title="Toggle raw markdown (Ctrl/Cmd+Shift+M)">Raw MD</button>
         </div>
         <nav id="md-toc-nav"></nav>
       </aside>
@@ -174,7 +183,6 @@ function renderReaderView(opts: {
         <article id="md-reader-article" class="md-reader-content">
           ${renderedHTML}
         </article>
-        <pre id="md-reader-raw" class="md-reader-raw md-hidden">${escapeHtml(rawMarkdown)}</pre>
       </main>
     </body>
   `;
@@ -185,42 +193,7 @@ function renderReaderView(opts: {
   window.scrollTo(0, 0);
 
   buildToc();
-  setupRawToggle();
   annotateMarkdownSupportLinks();
-}
-
-function setupRawToggle() {
-  const toggleButton = document.getElementById("md-toggle-raw") as HTMLButtonElement | null;
-  const article = document.getElementById("md-reader-article");
-  const raw = document.getElementById("md-reader-raw");
-  const tocNav = document.getElementById("md-toc-nav");
-  if (!toggleButton || !article || !raw) return;
-
-  let isRawVisible = false;
-
-  const applyState = () => {
-    article.classList.toggle("md-hidden", isRawVisible);
-    raw.classList.toggle("md-hidden", !isRawVisible);
-    tocNav?.classList.toggle("md-hidden", isRawVisible);
-    toggleButton.textContent = isRawVisible ? "Rendered" : "Raw MD";
-    toggleButton.setAttribute("aria-pressed", isRawVisible ? "true" : "false");
-  };
-
-  const toggle = () => {
-    isRawVisible = !isRawVisible;
-    applyState();
-  };
-
-  toggleButton.addEventListener("click", toggle);
-
-  document.addEventListener("keydown", (event) => {
-    const isShortcut = (event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "m";
-    if (!isShortcut) return;
-    event.preventDefault();
-    toggle();
-  });
-
-  applyState();
 }
 
 function buildToc() {
@@ -228,7 +201,7 @@ function buildToc() {
   const tocNav = document.getElementById("md-toc-nav");
   if (!article || !tocNav) return;
 
-  const headings = Array.from(article.querySelectorAll("h1, h2, h3"));
+  const headings = Array.from(article.querySelectorAll("h1, h2, h3, h4, h5, h6"));
   if (headings.length === 0) {
     document.getElementById("md-toc")?.remove();
     return;
@@ -246,6 +219,19 @@ function buildToc() {
     idCounts.set(baseId, count + 1);
     const id = count === 0 ? baseId : `${baseId}-${count}`;
     heading.id = id;
+
+    if (!heading.querySelector(".md-heading-anchor")) {
+      const anchor = document.createElement("a");
+      anchor.href = `#${id}`;
+      anchor.className = "md-heading-anchor";
+      anchor.textContent = "#";
+      anchor.setAttribute("aria-label", `Link to section: ${text}`);
+      heading.appendChild(anchor);
+    }
+
+    if (!/^H[1-3]$/.test(heading.tagName)) {
+      continue;
+    }
 
     const link = document.createElement("a");
     link.href = `#${id}`;
@@ -287,7 +273,21 @@ function setLinkTooltip(anchor: HTMLAnchorElement, text: string) {
   anchor.title = text;
 }
 
+async function isLinkCapabilityCheckEnabled(): Promise<boolean> {
+  try {
+    const response = (await api.runtime.sendMessage({
+      type: "GET_LINK_CHECKS_CONFIG",
+    })) as { enabled?: boolean };
+    return response?.enabled !== false;
+  } catch {
+    return true;
+  }
+}
+
 async function annotateMarkdownSupportLinks() {
+  const enabled = await isLinkCapabilityCheckEnabled();
+  if (!enabled) return;
+
   const anchors = Array.from(
     document.querySelectorAll<HTMLAnchorElement>(".md-reader-content a[href]")
   );

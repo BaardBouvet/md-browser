@@ -18,6 +18,7 @@ const ACCEPT_MARKDOWN =
   "text/markdown, text/html;q=0.9, application/xhtml+xml;q=0.8, */*;q=0.7";
 const ACCEPT_HTML =
   "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+const LINK_CHECKS_STORAGE_KEY = "enableLinkCapabilityChecks";
 
 interface LinkSupportInfo {
   supportsMarkdown: boolean;
@@ -85,6 +86,18 @@ async function refreshAllTabActionState() {
     if (typeof tab.id === "number") {
       updateActionState(tab.id);
     }
+  }
+}
+
+async function getLinkCapabilityChecksEnabled(): Promise<boolean> {
+  try {
+    const raw = await (api.storage.local as typeof chrome.storage.local).get({
+      [LINK_CHECKS_STORAGE_KEY]: true,
+    });
+    const value = (raw as Record<string, unknown>)[LINK_CHECKS_STORAGE_KEY];
+    return value !== false;
+  } catch {
+    return true;
   }
 }
 
@@ -209,11 +222,12 @@ api.runtime.onMessage.addListener(
           const info = markdownTabs.get(tabId);
           sendResponse({
             isMarkdown: !!info,
+            isBypassed: bypassedTabs.has(tabId),
             url: info?.url,
             tokens: info?.tokens,
           });
         } else {
-          sendResponse({ isMarkdown: false });
+          sendResponse({ isMarkdown: false, isBypassed: false });
         }
         break;
       }
@@ -237,13 +251,37 @@ api.runtime.onMessage.addListener(
       }
 
       case "PREFETCH_LINK_SUPPORT": {
-        const urls = Array.isArray((message as { urls?: string[] }).urls)
-          ? ((message as { urls?: string[] }).urls as string[])
-          : [];
+        getLinkCapabilityChecksEnabled()
+          .then(async (enabled) => {
+            if (!enabled) {
+              sendResponse({ supportByOrigin: {}, disabled: true });
+              return;
+            }
 
-        prefetchLinkSupport(urls)
-          .then((supportByOrigin) => sendResponse({ supportByOrigin }))
-          .catch(() => sendResponse({ supportByOrigin: {} }));
+            const urls = Array.isArray((message as { urls?: string[] }).urls)
+              ? ((message as { urls?: string[] }).urls as string[])
+              : [];
+
+            const supportByOrigin = await prefetchLinkSupport(urls);
+            sendResponse({ supportByOrigin, disabled: false });
+          })
+          .catch(() => sendResponse({ supportByOrigin: {}, disabled: false }));
+        return true;
+      }
+
+      case "GET_LINK_CHECKS_CONFIG": {
+        getLinkCapabilityChecksEnabled()
+          .then((enabled) => sendResponse({ enabled }))
+          .catch(() => sendResponse({ enabled: true }));
+        return true;
+      }
+
+      case "SET_LINK_CHECKS_CONFIG": {
+        const enabled = (message as { enabled?: boolean }).enabled !== false;
+        api.storage.local
+          .set({ [LINK_CHECKS_STORAGE_KEY]: enabled })
+          .then(() => sendResponse({ ok: true, enabled }))
+          .catch(() => sendResponse({ ok: false, enabled }));
         return true;
       }
 

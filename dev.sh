@@ -4,11 +4,10 @@
 # Node.js installed locally.
 # Usage:
 #   ./dev.sh install            — npm install
-#   ./dev.sh build              — build both Chromium (Chrome/Edge) + Firefox
-#   ./dev.sh build --firefox    — build Firefox only
+#   ./dev.sh build              — build Chromium (Chrome/Edge)
 #   ./dev.sh build --chromium   — build Chromium only
 #   ./dev.sh build --chrome     — build Chromium only (alias)
-#   ./dev.sh watch              — watch mode (both targets)
+#   ./dev.sh watch              — watch mode
 #   ./dev.sh shell              — interactive shell in container
 #   ./dev.sh <cmd>              — run arbitrary command
 # ────────────────────────────────────────────────────────────────────────────

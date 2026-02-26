@@ -3,11 +3,8 @@ import { cpSync, mkdirSync, writeFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
 
 const watch = process.argv.includes("--watch");
-const target = process.argv.find(
-  (a) => a === "--firefox" || a === "--chromium" || a === "--chrome"
-);
+const target = process.argv.find((a) => a === "--chromium" || a === "--chrome");
 const buildChromium = !target || target === "--chromium" || target === "--chrome";
-const buildFirefox = !target || target === "--firefox";
 
 // ---------------------------------------------------------------------------
 // 1. Generate simple PNG icons (solid rounded-rect style)
@@ -163,7 +160,6 @@ function prepareDistDir(distDir, manifestSrc) {
 }
 
 if (buildChromium) prepareDistDir("dist/chromium", "src/manifest.json");
-if (buildFirefox) prepareDistDir("dist/firefox", "src/manifest.firefox.json");
 
 // ---------------------------------------------------------------------------
 // 3. Bundle TypeScript
@@ -209,17 +205,12 @@ async function build() {
     await buildTarget("dist/chromium");
     console.log("✓ Chromium (Chrome/Edge) build complete → dist/chromium/");
   }
-  if (buildFirefox) {
-    await buildTarget("dist/firefox");
-    console.log("✓ Firefox build complete → dist/firefox/");
-  }
 }
 
 if (watch) {
-  // Watch mode: rebuild on changes for all active targets
+  // Watch mode: rebuild on changes for active target
   const targets = [];
   if (buildChromium) targets.push("dist/chromium");
-  if (buildFirefox) targets.push("dist/firefox");
 
   const contexts = [];
   for (const distDir of targets) {

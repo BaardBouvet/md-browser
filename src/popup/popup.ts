@@ -1,5 +1,7 @@
 // ─── md-browser: Popup Script ───────────────────────────────────────────────
 
+import { api } from "../browser-api";
+
 async function init() {
   const sourceEl = document.getElementById("source-type")!;
   const tokensRow = document.getElementById("tokens-row")!;
@@ -7,13 +9,19 @@ async function init() {
   const urlRow = document.getElementById("url-row")!;
   const pageUrl = document.getElementById("page-url")!;
   const btnToggle = document.getElementById("btn-toggle") as HTMLButtonElement;
+  const linkChecksToggle = document.getElementById(
+    "link-checks-toggle"
+  ) as HTMLInputElement;
+  const linkChecksHelp = document.getElementById("link-checks-help") as HTMLElement;
 
-  // Use browser.* on Firefox, chrome.* on Chrome
-  const _api: typeof chrome =
-    typeof browser !== "undefined" ? (browser as unknown as typeof chrome) : chrome;
+  const updateLinkChecksHelpText = (enabled: boolean) => {
+    linkChecksHelp.textContent = enabled
+      ? "Enabled: the extension checks links in reader mode and labels likely markdown targets."
+      : "Disabled: no background link checks are made, and link capability labels are hidden.";
+  };
 
   // Get current tab
-  const [tab] = await _api.tabs.query({
+  const [tab] = await api.tabs.query({
     active: true,
     currentWindow: true,
   });
@@ -22,13 +30,45 @@ async function init() {
     return;
   }
 
+  try {
+    const config = await api.runtime.sendMessage({
+      type: "GET_LINK_CHECKS_CONFIG",
+    });
+    linkChecksToggle.checked = config?.enabled !== false;
+    updateLinkChecksHelpText(linkChecksToggle.checked);
+  } catch {
+    linkChecksToggle.checked = true;
+    updateLinkChecksHelpText(true);
+  }
+
+  linkChecksToggle.addEventListener("change", async () => {
+    await api.runtime.sendMessage({
+      type: "SET_LINK_CHECKS_CONFIG",
+      enabled: linkChecksToggle.checked,
+    });
+    updateLinkChecksHelpText(linkChecksToggle.checked);
+  });
+
   // Query background for markdown status
-  const info = await _api.runtime.sendMessage({
+  const info = await api.runtime.sendMessage({
     type: "GET_TAB_INFO",
     tabId: tab.id,
   });
 
-  if (info?.isMarkdown) {
+  let isMarkdown = !!info?.isMarkdown;
+  const isBypassed = !!info?.isBypassed;
+  if (!isMarkdown) {
+    try {
+      const pageInfo = await api.tabs.sendMessage(tab.id, {
+        type: "GET_PAGE_SOURCE",
+      });
+      isMarkdown = !!pageInfo?.isMarkdownPage;
+    } catch {
+      // Ignore: no content script response available for this tab.
+    }
+  }
+
+  if (isMarkdown) {
     sourceEl.textContent = "text/markdown ✓";
     sourceEl.classList.add("is-markdown");
 
@@ -43,17 +83,6 @@ async function init() {
       pageUrl.title = info.url;
     }
 
-    // Show "View original" button
-    btnToggle.hidden = false;
-    btnToggle.textContent = "View original page";
-    btnToggle.addEventListener("click", async () => {
-      await _api.runtime.sendMessage({
-        type: "BYPASS_TAB",
-        tabId: tab.id,
-      });
-      await _api.tabs.reload(tab.id!);
-      window.close();
-    });
   } else {
     sourceEl.textContent = "text/html";
 
@@ -66,6 +95,33 @@ async function init() {
       } catch {
         pageUrl.textContent = tab.url;
       }
+    }
+  }
+
+  const canToggle = /^https?:\/\//i.test(tab.url ?? "");
+  if (canToggle) {
+    btnToggle.hidden = false;
+
+    if (isMarkdown && !isBypassed) {
+      btnToggle.textContent = "View original page";
+      btnToggle.addEventListener("click", async () => {
+        await api.runtime.sendMessage({
+          type: "BYPASS_TAB",
+          tabId: tab.id,
+        });
+        await api.tabs.reload(tab.id!);
+        window.close();
+      });
+    } else {
+      btnToggle.textContent = "Request markdown mode";
+      btnToggle.addEventListener("click", async () => {
+        await api.runtime.sendMessage({
+          type: "REMOVE_BYPASS",
+          tabId: tab.id,
+        });
+        await api.tabs.reload(tab.id!);
+        window.close();
+      });
     }
   }
 }

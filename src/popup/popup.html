@@ -9,7 +9,8 @@
 <body>
   <div class="popup">
     <header class="popup-header">
-      <h1>md-browser</h1>
+      <h1>Markdown Browser</h1>
+      <p class="popup-subtitle">Markdown reader controls for the current tab.</p>
     </header>
 
     <div class="popup-body">
@@ -25,15 +26,21 @@
         <span class="status-label">URL</span>
         <span class="status-value status-url" id="page-url">—</span>
       </div>
+      <section class="setting-block" aria-label="Link checks setting">
+        <label class="status-row status-toggle" for="link-checks-toggle">
+          <span class="status-label">Link checks</span>
+          <input type="checkbox" id="link-checks-toggle" />
+        </label>
+        <p class="setting-help" id="link-checks-help">
+          Marks links in reader mode as likely markdown or non-markdown by sending lightweight background checks.
+        </p>
+      </section>
     </div>
 
     <div class="popup-actions">
       <button id="btn-toggle" class="btn" hidden>View original</button>
     </div>
 
-    <footer class="popup-footer">
-      <span>v0.1.0 — MVP</span>
-    </footer>
   </div>
 
   <script src="popup.js"></script>

@@ -2,7 +2,7 @@
   "name": "md-browser",
   "version": "0.1.0",
   "private": true,
-  "description": "A reader-first web. Request markdown from servers, render with clean typography.",
+  "description": "Read the web in clean markdown with a distraction-free reader.",
   "scripts": {
     "build": "node build.mjs",
     "watch": "node build.mjs --watch",

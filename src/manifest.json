@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Markdown Browser",
   "version": "0.1.0",
-  "description": "A reader-first web. Requests markdown from servers that support it and renders everything with clean, distraction-free typography.",
+  "description": "Read the web in clean markdown with a distraction-free reader.",
   "permissions": [
     "declarativeNetRequest",
     "webRequest",
@@ -25,6 +25,7 @@
     }
   ],
   "action": {
+    "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
