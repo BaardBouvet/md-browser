@@ -1,6 +1,5 @@
 /* ─── md-browser: Reader View Typography ─────────────────────────────────── */
-/* Optimised for readability. Centered column, generous whitespace, system    */
-/* font stack, dark/light themes via prefers-color-scheme + data-attribute.   */
+/* Minimal reading view with browser-theme-following colours and TOC sidebar. */
 /* ──────────────────────────────────────────────────────────────────────────── */
 
 /* ─── Theme Variables ─────────────────────────────────────────────────────── */
@@ -18,26 +17,25 @@
   --md-code-block-text: #1a1a1a;
   --md-link: #2563eb;
   --md-link-hover: #1d4ed8;
+  --md-link-no-markdown: #ba0000;
   --md-blockquote-border: #d1d5db;
   --md-blockquote-bg: transparent;
   --md-blockquote-text: #4b5563;
   --md-table-border: #d1d5db;
   --md-table-stripe: #f9fafb;
-  --md-badge-bg: #27ae60;
-  --md-badge-text: #ffffff;
-  --md-footer-bg: #f9fafb;
-  --md-footer-border: #e5e5e5;
   --md-hr: #e5e5e5;
   --md-selection-bg: #bfdbfe;
   --md-kbd-bg: #f3f4f6;
   --md-kbd-border: #d1d5db;
+  --md-toc-bg: #ffffff;
+  --md-toc-border: #e5e5e5;
 }
 
 /* ─── Dark Theme ──────────────────────────────────────────────────────────── */
 
 @media (prefers-color-scheme: dark) {
   :root,
-  .md-reader-root:not([data-theme="light"]) {
+  .md-reader-root {
     --md-bg: #181a1b;
     --md-text: #d4d4d4;
     --md-text-secondary: #a0a0a0;
@@ -49,46 +47,19 @@
     --md-code-block-text: #d4d4d4;
     --md-link: #60a5fa;
     --md-link-hover: #93bbfd;
+    --md-link-no-markdown: #ff7b72;
     --md-blockquote-border: #4b5563;
     --md-blockquote-bg: #1f2937;
     --md-blockquote-text: #9ca3af;
     --md-table-border: #374151;
     --md-table-stripe: #1f2937;
-    --md-badge-bg: #27ae60;
-    --md-badge-text: #ffffff;
-    --md-footer-bg: #1e1e1e;
-    --md-footer-border: #2e2e2e;
     --md-hr: #333333;
     --md-selection-bg: #1e3a5f;
     --md-kbd-bg: #2a2a2a;
     --md-kbd-border: #444444;
+    --md-toc-bg: #161819;
+    --md-toc-border: #2e2e2e;
   }
-}
-
-/* Manual dark override */
-.md-reader-root[data-theme="dark"] {
-  --md-bg: #181a1b;
-  --md-text: #d4d4d4;
-  --md-text-secondary: #a0a0a0;
-  --md-text-muted: #707070;
-  --md-border: #2e2e2e;
-  --md-code-bg: #2a2a2a;
-  --md-code-text: #f0a6ca;
-  --md-code-block-bg: #1e1e1e;
-  --md-code-block-text: #d4d4d4;
-  --md-link: #60a5fa;
-  --md-link-hover: #93bbfd;
-  --md-blockquote-border: #4b5563;
-  --md-blockquote-bg: #1f2937;
-  --md-blockquote-text: #9ca3af;
-  --md-table-border: #374151;
-  --md-table-stripe: #1f2937;
-  --md-footer-bg: #1e1e1e;
-  --md-footer-border: #2e2e2e;
-  --md-hr: #333333;
-  --md-selection-bg: #1e3a5f;
-  --md-kbd-bg: #2a2a2a;
-  --md-kbd-border: #444444;
 }
 
 /* ─── Base Reset ──────────────────────────────────────────────────────────── */
@@ -121,7 +92,7 @@
 .md-reader-container {
   max-width: 720px;
   margin: 0 auto;
-  padding: 2rem 1.5rem 6rem;
+  padding: 2rem 1.5rem 2rem;
   min-height: 100vh;
   box-sizing: border-box;
 }
@@ -135,49 +106,6 @@
   .md-reader-root body {
     font-size: 16px;
   }
-}
-
-/* ─── Header / Meta ───────────────────────────────────────────────────────── */
-
-.md-reader-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--md-border);
-  flex-wrap: wrap;
-}
-
-.md-reader-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  background: var(--md-badge-bg);
-  color: var(--md-badge-text);
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 0.2rem 0.5rem;
-  border-radius: 3px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.md-reader-url {
-  font-size: 0.8rem;
-  color: var(--md-text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-.md-reader-description {
-  color: var(--md-text-secondary);
-  font-size: 1rem;
-  margin-bottom: 1.5rem;
-  line-height: 1.5;
 }
 
 /* ─── Article Content ─────────────────────────────────────────────────────── */
@@ -399,59 +327,176 @@
   box-shadow: 0 1px 0 var(--md-kbd-border);
 }
 
-/* ─── Footer Bar ──────────────────────────────────────────────────────────── */
+/* ─── TOC Sidebar ─────────────────────────────────────────────────────────── */
 
-.md-reader-footer {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+.md-toc {
+  position: absolute;
+  top: 2rem;
+  right: 1rem;
+  width: 260px;
+  max-height: none;
+  overflow: visible;
+  background: var(--md-toc-bg);
+  border: 1px solid var(--md-toc-border);
+  border-radius: 8px;
+  padding: 0.8rem;
+  z-index: 10000;
+}
+
+.md-hidden {
+  display: none;
+}
+
+.md-toc-title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--md-text-muted);
+  margin-bottom: 0;
+}
+
+.md-toc-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 1.5rem;
-  background: var(--md-footer-bg);
-  border-top: 1px solid var(--md-footer-border);
-  font-size: 0.75rem;
-  color: var(--md-text-muted);
-  z-index: 10000;
   gap: 0.5rem;
-  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
 }
 
-.md-reader-footer-left {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.md-reader-footer-right {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.md-reader-footer button {
-  background: none;
-  border: 1px solid var(--md-border);
+.md-toggle-raw {
+  border: 1px solid var(--md-toc-border);
+  background: transparent;
   color: var(--md-text-secondary);
-  font-size: 0.75rem;
-  padding: 0.25rem 0.6rem;
   border-radius: 4px;
+  font: inherit;
+  font-size: 0.7rem;
+  line-height: 1;
+  padding: 0.25rem 0.45rem;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  font-family: inherit;
 }
 
-.md-reader-footer button:hover {
-  background: var(--md-border);
-  color: var(--md-text);
+.md-toggle-raw:hover {
+  border-color: var(--md-link);
+  color: var(--md-link);
+}
+
+#md-toc-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.md-toc-link {
+  color: var(--md-text-secondary);
+  text-decoration: none;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.md-toc-link:hover {
+  color: var(--md-link);
+}
+
+.md-reader-content a.md-link-support {
+  color: var(--md-link);
+  text-decoration-thickness: 2px;
+  text-decoration-style: solid;
+}
+
+.md-reader-content a.md-link-no-support {
+  color: var(--md-link-no-markdown);
+  text-decoration-thickness: 2px;
+  text-decoration-style: solid;
+}
+
+.md-reader-content a.md-link-no-support:hover {
+  color: var(--md-link-no-markdown);
+  border-bottom-color: var(--md-link-no-markdown);
+}
+
+.md-reader-content a.md-link-has-tooltip {
+  position: relative;
+}
+
+.md-reader-content a.md-link-has-tooltip::before {
+  content: attr(data-md-tooltip);
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.45rem);
+  min-width: 12rem;
+  max-width: min(26rem, 80vw);
+  padding: 0.42rem 0.55rem;
+  border: 1px solid var(--md-border);
+  border-radius: 6px;
+  background: var(--md-toc-bg);
+  color: var(--md-text-secondary);
+  font-size: 0.74rem;
+  line-height: 1.35;
+  white-space: pre-line;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 10002;
+}
+
+.md-reader-content a.md-link-has-tooltip:hover::before,
+.md-reader-content a.md-link-has-tooltip:focus-visible::before {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.md-reader-raw {
+  margin: 0;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--md-border);
+  border-radius: 8px;
+  background: var(--md-code-block-bg);
+  color: var(--md-code-block-text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.md-toc-level-h2 {
+  margin-left: 0.65rem;
+}
+
+.md-toc-level-h3 {
+  margin-left: 1.3rem;
+}
+
+@media (min-width: 1280px) {
+  .md-reader-body {
+    position: relative;
+  }
+
+  .md-reader-container {
+    margin-left: auto;
+    margin-right: 320px;
+  }
+}
+
+@media (max-width: 1279px) {
+  .md-toc {
+    display: none;
+  }
+
+  .md-reader-container {
+    margin-left: auto;
+    margin-right: auto;
+    padding-top: 1.25rem;
+  }
 }
 
 /* ─── Print ───────────────────────────────────────────────────────────────── */
 
 @media print {
-  .md-reader-footer {
+  .md-toc {
     display: none;
   }
 

@@ -27,14 +27,13 @@ const md = new MarkdownIt({
   if ((window as unknown as Record<string, boolean>).__mdBrowserInit) return;
   (window as unknown as Record<string, boolean>).__mdBrowserInit = true;
 
-  // Guard: skip if user previously chose "view original" for this page
-  if (sessionStorage.getItem("md-browser-bypass") === window.location.href) {
-    sessionStorage.removeItem("md-browser-bypass");
-    return;
-  }
-
   // Primary detection: the browser exposes the MIME type of the response
-  const isMarkdown = document.contentType === "text/markdown";
+  const isMarkdown = document.contentType.includes("text/markdown");
+
+  // Reduce raw-markdown flash by hiding the document as early as possible.
+  if (isMarkdown && document.documentElement) {
+    document.documentElement.style.visibility = "hidden";
+  }
 
   // Secondary detection: ask the background service worker
   let bgInfo: { isMarkdown?: boolean; tokens?: string } = {};
@@ -44,11 +43,16 @@ const md = new MarkdownIt({
     // Background may not be ready (e.g., service worker still starting)
   }
 
-  if (!isMarkdown && !bgInfo?.isMarkdown) return;
+  if (!isMarkdown && !bgInfo?.isMarkdown) {
+    if (document.documentElement) {
+      document.documentElement.style.visibility = "";
+    }
+    return;
+  }
 
   // ─── Extract raw markdown ───────────────────────────────────────────────
 
-  const rawMarkdown = extractMarkdownText();
+  const rawMarkdown = await extractMarkdownText();
   if (!rawMarkdown.trim()) return;
 
   // ─── Parse and render ───────────────────────────────────────────────────
@@ -57,21 +61,29 @@ const md = new MarkdownIt({
   const renderedHTML = md.render(body);
   const title =
     frontmatter?.title || extractFirstHeading(body) || document.title || "Untitled";
-  const tokens = bgInfo?.tokens;
 
-  renderReaderView({ title, frontmatter, renderedHTML, tokens });
+  renderReaderView({ title, renderedHTML, rawMarkdown });
+
+  if (document.documentElement) {
+    document.documentElement.style.visibility = "";
+  }
 })();
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 /**
  * Extract the raw markdown text from the page.
- * When Chrome renders text/markdown, it wraps the text in a <pre> element.
+ * When Chromium/Firefox renders text/markdown, it is often wrapped in <pre>.
+ * At document_start we may need to wait for that node/text to appear.
  */
-function extractMarkdownText(): string {
-  const pre = document.querySelector("pre");
-  if (pre) return pre.textContent ?? "";
-  return document.body?.innerText ?? document.body?.textContent ?? "";
+async function extractMarkdownText(): Promise<string> {
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const pre = document.querySelector("pre");
+    const text = (pre?.textContent ?? document.body?.innerText ?? document.body?.textContent ?? "").trim();
+    if (text) return text;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return "";
 }
 
 /**
@@ -123,20 +135,24 @@ function escapeHtml(str: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 // ─── Render ─────────────────────────────────────────────────────────────────
 
 function renderReaderView(opts: {
   title: string;
-  frontmatter: Record<string, string> | null;
   renderedHTML: string;
-  tokens?: string;
+  rawMarkdown: string;
 }) {
-  const { title, frontmatter, renderedHTML, tokens } = opts;
-  const url = window.location.href;
-
-  // Detect system dark mode for initial theme
-  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const initialTheme = prefersDark ? "dark" : "light";
+  const { title, renderedHTML, rawMarkdown } = opts;
 
   // Build the reader page
   document.documentElement.innerHTML = /* html */ `
@@ -146,69 +162,178 @@ function renderReaderView(opts: {
       <title>${escapeHtml(title)}</title>
       <style>${readerCSS}</style>
     </head>
-    <body>
-      <div class="md-reader-container">
-        <header>
-          <div class="md-reader-meta">
-            <span class="md-reader-badge">MD ✓</span>
-            <span class="md-reader-url">${escapeHtml(url)}</span>
-          </div>
-          ${
-            frontmatter?.description
-              ? `<p class="md-reader-description">${escapeHtml(frontmatter.description)}</p>`
-              : ""
-          }
-        </header>
-        <article class="md-reader-content">
+    <body class="md-reader-body">
+      <aside id="md-toc" class="md-toc" aria-label="Table of contents">
+        <div class="md-toc-head">
+          <div class="md-toc-title">On this page</div>
+          <button id="md-toggle-raw" class="md-toggle-raw" type="button" title="Toggle raw markdown (Ctrl/Cmd+Shift+M)">Raw MD</button>
+        </div>
+        <nav id="md-toc-nav"></nav>
+      </aside>
+      <main class="md-reader-container">
+        <article id="md-reader-article" class="md-reader-content">
           ${renderedHTML}
         </article>
-      </div>
-      <footer class="md-reader-footer">
-        <div class="md-reader-footer-left">
-          <span>Source: <strong>text/markdown</strong> ✓</span>
-          ${tokens ? `<span>${escapeHtml(tokens)} tokens</span>` : ""}
-        </div>
-        <div class="md-reader-footer-right">
-          <button id="md-theme-toggle" title="Toggle dark/light theme">
-            ${initialTheme === "dark" ? "☀ Light" : "● Dark"}
-          </button>
-          <button id="md-view-original" title="View the original HTML page">
-            View original
-          </button>
-        </div>
-      </footer>
+        <pre id="md-reader-raw" class="md-reader-raw md-hidden">${escapeHtml(rawMarkdown)}</pre>
+      </main>
     </body>
   `;
 
-  // Apply theme class
   document.documentElement.classList.add("md-reader-root");
-  document.documentElement.setAttribute("data-theme", initialTheme);
 
   // Scroll to top
   window.scrollTo(0, 0);
 
-  // ─── Interactive handlers ─────────────────────────────────────────────
+  buildToc();
+  setupRawToggle();
+  annotateMarkdownSupportLinks();
+}
 
-  // Theme toggle
-  document.getElementById("md-theme-toggle")?.addEventListener("click", () => {
-    const current = document.documentElement.getAttribute("data-theme");
-    const next = current === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", next);
-    const btn = document.getElementById("md-theme-toggle");
-    if (btn) btn.textContent = next === "dark" ? "☀ Light" : "● Dark";
+function setupRawToggle() {
+  const toggleButton = document.getElementById("md-toggle-raw") as HTMLButtonElement | null;
+  const article = document.getElementById("md-reader-article");
+  const raw = document.getElementById("md-reader-raw");
+  const tocNav = document.getElementById("md-toc-nav");
+  if (!toggleButton || !article || !raw) return;
+
+  let isRawVisible = false;
+
+  const applyState = () => {
+    article.classList.toggle("md-hidden", isRawVisible);
+    raw.classList.toggle("md-hidden", !isRawVisible);
+    tocNav?.classList.toggle("md-hidden", isRawVisible);
+    toggleButton.textContent = isRawVisible ? "Rendered" : "Raw MD";
+    toggleButton.setAttribute("aria-pressed", isRawVisible ? "true" : "false");
+  };
+
+  const toggle = () => {
+    isRawVisible = !isRawVisible;
+    applyState();
+  };
+
+  toggleButton.addEventListener("click", toggle);
+
+  document.addEventListener("keydown", (event) => {
+    const isShortcut = (event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "m";
+    if (!isShortcut) return;
+    event.preventDefault();
+    toggle();
   });
 
-  // View original (bypass markdown)
-  document
-    .getElementById("md-view-original")
-    ?.addEventListener("click", async () => {
-      try {
-        // Ask background to bypass the Accept header for this tab
-        await api.runtime.sendMessage({ type: "BYPASS_TAB" });
-      } catch {
-        // Fallback: set a session flag
-        sessionStorage.setItem("md-browser-bypass", window.location.href);
-      }
-      window.location.reload();
-    });
+  applyState();
+}
+
+function buildToc() {
+  const article = document.getElementById("md-reader-article");
+  const tocNav = document.getElementById("md-toc-nav");
+  if (!article || !tocNav) return;
+
+  const headings = Array.from(article.querySelectorAll("h1, h2, h3"));
+  if (headings.length === 0) {
+    document.getElementById("md-toc")?.remove();
+    return;
+  }
+
+  const idCounts = new Map<string, number>();
+  const fragment = document.createDocumentFragment();
+
+  for (const heading of headings) {
+    const text = heading.textContent?.trim();
+    if (!text) continue;
+
+    const baseId = slugify(text) || "section";
+    const count = idCounts.get(baseId) ?? 0;
+    idCounts.set(baseId, count + 1);
+    const id = count === 0 ? baseId : `${baseId}-${count}`;
+    heading.id = id;
+
+    const link = document.createElement("a");
+    link.href = `#${id}`;
+    link.textContent = text;
+    link.className = `md-toc-link md-toc-level-${heading.tagName.toLowerCase()}`;
+    fragment.appendChild(link);
+  }
+
+  tocNav.appendChild(fragment);
+}
+
+interface LinkSupportInfo {
+  supportsMarkdown: boolean;
+  contentType?: string;
+  checkedVia?: "head" | "get" | "none";
+}
+
+function createTargetHoverText(info: LinkSupportInfo): string {
+  const status = info.supportsMarkdown
+    ? "Target likely supports markdown"
+    : "Target is not a markdown URL";
+  const contentType = info.contentType?.trim()
+    ? `Content-Type: ${info.contentType}`
+    : "Content-Type: unknown";
+  const checkedVia =
+    info.checkedVia === "head"
+      ? "Checked: HEAD"
+      : info.checkedVia === "get"
+        ? "Checked: GET"
+        : "Checked: unavailable";
+
+  return `${status}\n${contentType}\n${checkedVia}`;
+}
+
+function setLinkTooltip(anchor: HTMLAnchorElement, text: string) {
+  anchor.classList.add("md-link-has-tooltip");
+  anchor.dataset.mdTooltip = text;
+  anchor.setAttribute("aria-label", text.replace(/\n/g, ". "));
+  anchor.title = text;
+}
+
+async function annotateMarkdownSupportLinks() {
+  const anchors = Array.from(
+    document.querySelectorAll<HTMLAnchorElement>(".md-reader-content a[href]")
+  );
+
+  const urls = anchors
+    .map((anchor) => anchor.href)
+    .filter((href) => /^https?:\/\//i.test(href));
+
+  if (urls.length === 0) return;
+
+  let supportByUrl: Record<string, LinkSupportInfo> = {};
+  try {
+    const response = (await api.runtime.sendMessage({
+      type: "PREFETCH_LINK_SUPPORT",
+      urls,
+    })) as { supportByOrigin?: Record<string, LinkSupportInfo> };
+    supportByUrl = response?.supportByOrigin ?? {};
+  } catch {
+    return;
+  }
+
+  for (const anchor of anchors) {
+    let urlKey: string;
+    try {
+      const parsed = new URL(anchor.href);
+      parsed.hash = "";
+      urlKey = parsed.toString();
+    } catch {
+      continue;
+    }
+
+    const info = supportByUrl[urlKey] ?? {
+      supportsMarkdown: false,
+      contentType: "",
+      checkedVia: "none",
+    };
+
+    const hoverText = createTargetHoverText(info);
+    setLinkTooltip(anchor, hoverText);
+
+    if (info.supportsMarkdown) {
+      anchor.classList.add("md-link-support");
+      anchor.classList.remove("md-link-no-support");
+    } else {
+      anchor.classList.add("md-link-no-support");
+      anchor.classList.remove("md-link-support");
+    }
+  }
 }

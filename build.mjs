@@ -36,6 +36,7 @@ function pngChunk(type, data) {
 function createIconPNG(size) {
   // Blue-ish colour (#4A7FDB)
   const r = 74, g = 127, b = 219;
+  const fr = 255, fg = 255, fb = 255; // foreground glyph (M)
   const bgR = 0, bgG = 0, bgB = 0, bgA = 0; // transparent background
 
   const radius = Math.max(Math.floor(size * 0.22), 2);
@@ -48,6 +49,46 @@ function createIconPNG(size) {
 
   const rowLen = size * 4 + 1; // +1 for filter byte
   const raw = Buffer.alloc(rowLen * size);
+
+  const glyphTop = Math.floor(size * 0.22);
+  const glyphBottom = Math.floor(size * 0.78);
+  const glyphInset = Math.floor(size * 0.24);
+  const stroke = Math.max(1, Math.floor(size * 0.1));
+
+  function pointToSegmentDistance(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    if (dx === 0 && dy === 0) return Math.hypot(px - x1, py - y1);
+
+    const t = Math.max(
+      0,
+      Math.min(1, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy))
+    );
+    const projX = x1 + t * dx;
+    const projY = y1 + t * dy;
+    return Math.hypot(px - projX, py - projY);
+  }
+
+  function isGlyphPixel(x, y) {
+    if (y < glyphTop || y > glyphBottom) return false;
+
+    const leftX = glyphInset;
+    const rightX = size - 1 - glyphInset;
+    const centerX = Math.floor((leftX + rightX) / 2);
+    const innerTopY = glyphTop + Math.floor((glyphBottom - glyphTop) * 0.48);
+
+    const maxDist = stroke / 2;
+
+    const leftStem = pointToSegmentDistance(x, y, leftX, glyphBottom, leftX, glyphTop) <= maxDist;
+    const rightStem =
+      pointToSegmentDistance(x, y, rightX, glyphBottom, rightX, glyphTop) <= maxDist;
+    const leftDiagonal =
+      pointToSegmentDistance(x, y, leftX, glyphTop, centerX, innerTopY) <= maxDist;
+    const rightDiagonal =
+      pointToSegmentDistance(x, y, rightX, glyphTop, centerX, innerTopY) <= maxDist;
+
+    return leftStem || rightStem || leftDiagonal || rightDiagonal;
+  }
 
   for (let y = 0; y < size; y++) {
     raw[y * rowLen] = 0; // filter: none
@@ -76,9 +117,15 @@ function createIconPNG(size) {
       }
 
       if (inside) {
-        raw[off] = r;
-        raw[off + 1] = g;
-        raw[off + 2] = b;
+        if (isGlyphPixel(x, y)) {
+          raw[off] = fr;
+          raw[off + 1] = fg;
+          raw[off + 2] = fb;
+        } else {
+          raw[off] = r;
+          raw[off + 1] = g;
+          raw[off + 2] = b;
+        }
         raw[off + 3] = 255;
       } else {
         raw[off] = bgR;

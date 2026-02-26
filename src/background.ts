@@ -19,6 +19,12 @@ const ACCEPT_MARKDOWN =
 const ACCEPT_HTML =
   "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
 
+interface LinkSupportInfo {
+  supportsMarkdown: boolean;
+  contentType: string;
+  checkedVia: "head" | "get" | "none";
+}
+
 interface MarkdownTabInfo {
   url: string;
   tokens?: string;
@@ -31,12 +37,56 @@ const markdownTabs = new Map<number, MarkdownTabInfo>();
 
 // Set of tab IDs that are in bypass mode (view original)
 const bypassedTabs = new Set<number>();
+const markdownSupportCache = new Map<string, LinkSupportInfo>();
+const markdownSupportInFlight = new Map<string, Promise<LinkSupportInfo>>();
 
 // ─── Badge helper (browserAction on Firefox MV2, action on Chrome MV3) ─────
 
 const badge = isFirefox
   ? (api as unknown as { browserAction: typeof chrome.action }).browserAction
   : api.action;
+const action = badge;
+
+function updateActionState(tabId: number) {
+  const isMarkdown = markdownTabs.has(tabId);
+  const isBypassed = bypassedTabs.has(tabId);
+
+  if (isMarkdown) {
+    action.setBadgeText({ text: "MD", tabId });
+    action.setBadgeBackgroundColor({ color: "#27AE60", tabId });
+    if (typeof action.setBadgeTextColor === "function") {
+      action.setBadgeTextColor({ color: "#FFFFFF", tabId });
+    }
+    action.setTitle({ title: "Markdown mode (click to view HTML)", tabId });
+    return;
+  }
+
+  if (isBypassed) {
+    action.setBadgeText({ text: "H", tabId });
+    action.setBadgeBackgroundColor({ color: "#6B7280", tabId });
+    if (typeof action.setBadgeTextColor === "function") {
+      action.setBadgeTextColor({ color: "#FFFFFF", tabId });
+    }
+    action.setTitle({ title: "HTML mode (click to request Markdown)", tabId });
+    return;
+  }
+
+  action.setBadgeText({ text: "M", tabId });
+  action.setBadgeBackgroundColor({ color: "#2563EB", tabId });
+  if (typeof action.setBadgeTextColor === "function") {
+    action.setBadgeTextColor({ color: "#FFFFFF", tabId });
+  }
+  action.setTitle({ title: "Markdown preferred (click to force HTML)", tabId });
+}
+
+async function refreshAllTabActionState() {
+  const tabs = await api.tabs.query({});
+  for (const tab of tabs) {
+    if (typeof tab.id === "number") {
+      updateActionState(tab.id);
+    }
+  }
+}
 
 // ─── 1. Modify Accept headers ──────────────────────────────────────────────
 
@@ -68,6 +118,7 @@ if (hasDeclarativeNetRequest) {
       ],
     });
     console.log("[md-browser] Accept header rule installed (declarativeNetRequest)");
+    await refreshAllTabActionState();
   });
 } else {
   // Firefox MV2: webRequest.onBeforeSendHeaders for header rewriting
@@ -113,13 +164,8 @@ api.webRequest.onHeadersReceived.addListener(
         tokens,
         contentType,
       });
-
-      // Set badge
-      badge.setBadgeText({ text: "MD", tabId: details.tabId });
-      badge.setBadgeBackgroundColor({
-        color: "#27AE60",
-        tabId: details.tabId,
-      });
+      bypassedTabs.delete(details.tabId);
+      updateActionState(details.tabId);
 
       console.log(
         `[md-browser] Markdown detected on tab ${details.tabId}: ${details.url}`
@@ -128,8 +174,8 @@ api.webRequest.onHeadersReceived.addListener(
       // If this tab previously had markdown but now navigated to HTML, clear it
       if (markdownTabs.has(details.tabId)) {
         markdownTabs.delete(details.tabId);
-        badge.setBadgeText({ text: "", tabId: details.tabId });
       }
+      updateActionState(details.tabId);
     }
   },
   { urls: ["<all_urls>"], types: ["main_frame"] },
@@ -190,6 +236,17 @@ api.runtime.onMessage.addListener(
         break;
       }
 
+      case "PREFETCH_LINK_SUPPORT": {
+        const urls = Array.isArray((message as { urls?: string[] }).urls)
+          ? ((message as { urls?: string[] }).urls as string[])
+          : [];
+
+        prefetchLinkSupport(urls)
+          .then((supportByOrigin) => sendResponse({ supportByOrigin }))
+          .catch(() => sendResponse({ supportByOrigin: {} }));
+        return true;
+      }
+
       default:
         sendResponse({ error: "unknown message type" });
     }
@@ -207,7 +264,7 @@ function bypassRuleId(tabId: number) {
 async function bypassTab(tabId: number) {
   bypassedTabs.add(tabId);
   markdownTabs.delete(tabId);
-  badge.setBadgeText({ text: "", tabId });
+  updateActionState(tabId);
 
   if (hasDeclarativeNetRequest) {
     // Chrome: session rule to override global rule for this tab
@@ -242,6 +299,7 @@ async function bypassTab(tabId: number) {
 
 async function removeBypass(tabId: number) {
   bypassedTabs.delete(tabId);
+  updateActionState(tabId);
   if (hasDeclarativeNetRequest) {
     await api.declarativeNetRequest.updateSessionRules({
       removeRuleIds: [bypassRuleId(tabId)],
@@ -260,3 +318,120 @@ api.tabs.onRemoved.addListener((tabId) => {
     });
   }
 });
+
+api.tabs.onActivated.addListener(({ tabId }) => {
+  updateActionState(tabId);
+});
+
+api.runtime.onStartup?.addListener(() => {
+  void refreshAllTabActionState();
+});
+
+api.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status === "loading" || changeInfo.status === "complete") {
+    updateActionState(tabId);
+  }
+});
+
+action.onClicked.addListener(async (tab) => {
+  if (!tab.id) return;
+
+  if (markdownTabs.has(tab.id)) {
+    await bypassTab(tab.id);
+  } else {
+    await removeBypass(tab.id);
+  }
+
+  await api.tabs.reload(tab.id);
+});
+
+async function prefetchLinkSupport(urls: string[]) {
+  const uniqueUrls = Array.from(
+    new Set(
+      urls
+        .map((url) => {
+          try {
+            const parsed = new URL(url);
+            if (!/^https?:$/.test(parsed.protocol)) return null;
+            parsed.hash = "";
+            return parsed.toString();
+          } catch {
+            return null;
+          }
+        })
+        .filter((candidate): candidate is string => !!candidate)
+    )
+  ).slice(0, 80);
+
+  const checks = await Promise.all(
+    uniqueUrls.map(async (url) => [url, await checkUrlMarkdownSupport(url)] as const)
+  );
+
+  return Object.fromEntries(checks);
+}
+
+async function checkUrlMarkdownSupport(url: string): Promise<LinkSupportInfo> {
+  if (markdownSupportCache.has(url)) {
+    return markdownSupportCache.get(url) ?? {
+      supportsMarkdown: false,
+      contentType: "",
+      checkedVia: "none",
+    };
+  }
+
+  const inFlight = markdownSupportInFlight.get(url);
+  if (inFlight) return inFlight;
+
+  const requestPromise = (async () => {
+    let result: LinkSupportInfo = {
+      supportsMarkdown: false,
+      contentType: "",
+      checkedVia: "none",
+    };
+
+    try {
+      const headResponse = await fetch(url, {
+        method: "HEAD",
+        redirect: "follow",
+        headers: { Accept: ACCEPT_MARKDOWN },
+      });
+
+      const headContentType = headResponse.headers.get("content-type") ?? "";
+      result = {
+        supportsMarkdown: headContentType.includes("text/markdown"),
+        contentType: headContentType,
+        checkedVia: "head",
+      };
+
+      if (!result.supportsMarkdown) {
+        const controller = new AbortController();
+        const getResponse = await fetch(url, {
+          method: "GET",
+          redirect: "follow",
+          headers: { Accept: ACCEPT_MARKDOWN },
+          signal: controller.signal,
+        });
+        const getContentType = getResponse.headers.get("content-type") ?? "";
+        result = {
+          supportsMarkdown: getContentType.includes("text/markdown"),
+          contentType: getContentType,
+          checkedVia: "get",
+        };
+        controller.abort();
+      }
+    } catch {
+      result = {
+        supportsMarkdown: false,
+        contentType: "",
+        checkedVia: "none",
+      };
+    }
+
+    markdownSupportCache.set(url, result);
+    markdownSupportInFlight.delete(url);
+    return result;
+  })();
+
+  markdownSupportInFlight.set(url, requestPromise);
+  return requestPromise;
+}

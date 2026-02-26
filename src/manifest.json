@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "md-browser",
+  "name": "Markdown Browser",
   "version": "0.1.0",
   "description": "A reader-first web. Requests markdown from servers that support it and renders everything with clean, distraction-free typography.",
   "permissions": [
@@ -8,7 +8,8 @@
     "webRequest",
     "scripting",
     "storage",
-    "activeTab"
+    "activeTab",
+    "tabs"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -20,11 +21,10 @@
     {
       "matches": ["<all_urls>"],
       "js": ["content.js"],
-      "run_at": "document_end"
+      "run_at": "document_start"
     }
   ],
   "action": {
-    "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
