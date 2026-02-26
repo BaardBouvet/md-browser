@@ -169,7 +169,7 @@ if (buildChromium) prepareDistDir("dist/chromium", "src/manifest.json");
 const commonOptions = {
   bundle: true,
   sourcemap: false,
-  target: "es2022",
+  target: "es2019",
   logLevel: "info",
 };
 
