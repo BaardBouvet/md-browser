@@ -19,11 +19,25 @@ const ACCEPT_MARKDOWN =
 const ACCEPT_HTML =
   "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
 const LINK_CHECKS_STORAGE_KEY = "enableLinkCapabilityChecks";
+const RUNTIME_STATE_STORAGE_KEY = "runtimeStateV1";
+
+const LINK_CHECK_WINDOW_MS = 60_000;
+const LINK_CHECK_MAX_PER_WINDOW = 24;
+const LINK_CHECK_TTL_SUCCESS_MS = 30 * 60_000;
+const LINK_CHECK_TTL_NEGATIVE_MS = 10 * 60_000;
+const LINK_CHECK_BACKOFF_BASE_MS = 30_000;
+const LINK_CHECK_BACKOFF_MAX_MS = 30 * 60_000;
 
 interface LinkSupportInfo {
   supportsMarkdown: boolean;
   contentType: string;
   checkedVia: "head" | "get" | "none";
+}
+
+interface CachedLinkSupportInfo extends LinkSupportInfo {
+  expiresAt: number;
+  failureCount: number;
+  backoffUntil: number;
 }
 
 interface MarkdownTabInfo {
@@ -38,8 +52,9 @@ const markdownTabs = new Map<number, MarkdownTabInfo>();
 
 // Set of tab IDs that are in bypass mode (view original)
 const bypassedTabs = new Set<number>();
-const markdownSupportCache = new Map<string, LinkSupportInfo>();
+const markdownSupportCache = new Map<string, CachedLinkSupportInfo>();
 const markdownSupportInFlight = new Map<string, Promise<LinkSupportInfo>>();
+const linkCheckBudgetByTab = new Map<number, { windowStart: number; count: number }>();
 
 // ─── Badge helper (browserAction on Firefox MV2, action on Chrome MV3) ─────
 
@@ -89,6 +104,53 @@ async function refreshAllTabActionState() {
   }
 }
 
+function runtimeStorageArea(): chrome.storage.StorageArea {
+  const storageAny = api.storage as unknown as {
+    session?: chrome.storage.StorageArea;
+    local: chrome.storage.StorageArea;
+  };
+  return storageAny.session ?? storageAny.local;
+}
+
+async function persistRuntimeState() {
+  const serializedMarkdownTabs = Array.from(markdownTabs.entries());
+  const serializedBypassedTabs = Array.from(bypassedTabs.values());
+  await runtimeStorageArea().set({
+    [RUNTIME_STATE_STORAGE_KEY]: {
+      markdownTabs: serializedMarkdownTabs,
+      bypassedTabs: serializedBypassedTabs,
+    },
+  });
+}
+
+async function restoreRuntimeState() {
+  const raw = await runtimeStorageArea().get({ [RUNTIME_STATE_STORAGE_KEY]: null });
+  const state = (raw as Record<string, unknown>)[RUNTIME_STATE_STORAGE_KEY] as
+    | {
+        markdownTabs?: Array<[number, MarkdownTabInfo]>;
+        bypassedTabs?: number[];
+      }
+    | null;
+
+  if (!state) return;
+
+  markdownTabs.clear();
+  bypassedTabs.clear();
+
+  for (const entry of state.markdownTabs ?? []) {
+    if (!Array.isArray(entry) || entry.length !== 2) continue;
+    const [tabId, info] = entry;
+    if (typeof tabId !== "number" || typeof info !== "object" || !info) continue;
+    markdownTabs.set(tabId, info);
+  }
+
+  for (const tabId of state.bypassedTabs ?? []) {
+    if (typeof tabId === "number") {
+      bypassedTabs.add(tabId);
+    }
+  }
+}
+
 async function getLinkCapabilityChecksEnabled(): Promise<boolean> {
   try {
     const raw = await (api.storage.local as typeof chrome.storage.local).get({
@@ -131,6 +193,7 @@ if (hasDeclarativeNetRequest) {
       ],
     });
     console.log("[md-browser] Accept header rule installed (declarativeNetRequest)");
+    await restoreRuntimeState();
     await refreshAllTabActionState();
   });
 } else {
@@ -179,6 +242,7 @@ api.webRequest.onHeadersReceived.addListener(
       });
       bypassedTabs.delete(details.tabId);
       updateActionState(details.tabId);
+      void persistRuntimeState();
 
       console.log(
         `[md-browser] Markdown detected on tab ${details.tabId}: ${details.url}`
@@ -189,6 +253,7 @@ api.webRequest.onHeadersReceived.addListener(
         markdownTabs.delete(details.tabId);
       }
       updateActionState(details.tabId);
+      void persistRuntimeState();
     }
   },
   { urls: ["http://*/*", "https://*/*"], types: ["main_frame"] },
@@ -262,7 +327,7 @@ api.runtime.onMessage.addListener(
               ? ((message as { urls?: string[] }).urls as string[])
               : [];
 
-            const supportByOrigin = await prefetchLinkSupport(urls);
+            const supportByOrigin = await prefetchLinkSupport(urls, tabId);
             sendResponse({ supportByOrigin, disabled: false });
           })
           .catch(() => sendResponse({ supportByOrigin: {}, disabled: false }));
@@ -303,6 +368,7 @@ async function bypassTab(tabId: number) {
   bypassedTabs.add(tabId);
   markdownTabs.delete(tabId);
   updateActionState(tabId);
+  await persistRuntimeState();
 
   if (hasDeclarativeNetRequest) {
     // Chrome: session rule to override global rule for this tab
@@ -338,6 +404,7 @@ async function bypassTab(tabId: number) {
 async function removeBypass(tabId: number) {
   bypassedTabs.delete(tabId);
   updateActionState(tabId);
+  await persistRuntimeState();
   if (hasDeclarativeNetRequest) {
     await api.declarativeNetRequest.updateSessionRules({
       removeRuleIds: [bypassRuleId(tabId)],
@@ -350,6 +417,8 @@ async function removeBypass(tabId: number) {
 api.tabs.onRemoved.addListener((tabId) => {
   markdownTabs.delete(tabId);
   bypassedTabs.delete(tabId);
+  linkCheckBudgetByTab.delete(tabId);
+  void persistRuntimeState();
   if (hasDeclarativeNetRequest) {
     api.declarativeNetRequest.updateSessionRules({
       removeRuleIds: [bypassRuleId(tabId)],
@@ -362,7 +431,7 @@ api.tabs.onActivated.addListener(({ tabId }) => {
 });
 
 api.runtime.onStartup?.addListener(() => {
-  void refreshAllTabActionState();
+  void restoreRuntimeState().then(() => refreshAllTabActionState());
 });
 
 api.tabs.onUpdated.addListener((tabId, changeInfo) => {
@@ -383,7 +452,31 @@ action.onClicked.addListener(async (tab) => {
   await api.tabs.reload(tab.id);
 });
 
-async function prefetchLinkSupport(urls: string[]) {
+function tabLinkCheckBudgetRemaining(tabId: number | undefined): number {
+  if (typeof tabId !== "number") return LINK_CHECK_MAX_PER_WINDOW;
+
+  const now = Date.now();
+  const current = linkCheckBudgetByTab.get(tabId);
+  if (!current || now - current.windowStart > LINK_CHECK_WINDOW_MS) {
+    linkCheckBudgetByTab.set(tabId, { windowStart: now, count: 0 });
+    return LINK_CHECK_MAX_PER_WINDOW;
+  }
+
+  return Math.max(0, LINK_CHECK_MAX_PER_WINDOW - current.count);
+}
+
+function consumeTabLinkCheckBudget(tabId: number | undefined, count: number) {
+  if (typeof tabId !== "number" || count <= 0) return;
+  const now = Date.now();
+  const current = linkCheckBudgetByTab.get(tabId);
+  if (!current || now - current.windowStart > LINK_CHECK_WINDOW_MS) {
+    linkCheckBudgetByTab.set(tabId, { windowStart: now, count });
+    return;
+  }
+  current.count += count;
+}
+
+async function prefetchLinkSupport(urls: string[], tabId?: number) {
   const uniqueUrls = Array.from(
     new Set(
       urls
@@ -401,16 +494,40 @@ async function prefetchLinkSupport(urls: string[]) {
     )
   ).slice(0, 80);
 
+  const budget = tabLinkCheckBudgetRemaining(tabId);
+  const budgetedUrls = uniqueUrls.slice(0, budget);
+  consumeTabLinkCheckBudget(tabId, budgetedUrls.length);
+
   const checks = await Promise.all(
-    uniqueUrls.map(async (url) => [url, await checkUrlMarkdownSupport(url)] as const)
+    budgetedUrls.map(async (url) => [url, await checkUrlMarkdownSupport(url)] as const)
   );
 
   return Object.fromEntries(checks);
 }
 
 async function checkUrlMarkdownSupport(url: string): Promise<LinkSupportInfo> {
-  if (markdownSupportCache.has(url)) {
-    return markdownSupportCache.get(url) ?? {
+  const now = Date.now();
+  const cached = markdownSupportCache.get(url);
+  if (cached) {
+    if (now < cached.backoffUntil) {
+      return {
+        supportsMarkdown: false,
+        contentType: cached.contentType,
+        checkedVia: "none",
+      };
+    }
+
+    if (now < cached.expiresAt) {
+      return {
+        supportsMarkdown: cached.supportsMarkdown,
+        contentType: cached.contentType,
+        checkedVia: cached.checkedVia,
+      };
+    }
+  }
+
+  if (markdownSupportCache.has(url) && !cached) {
+    return {
       supportsMarkdown: false,
       contentType: "",
       checkedVia: "none",
@@ -426,6 +543,7 @@ async function checkUrlMarkdownSupport(url: string): Promise<LinkSupportInfo> {
       contentType: "",
       checkedVia: "none",
     };
+    let failed = false;
 
     try {
       const headResponse = await fetch(url, {
@@ -458,6 +576,7 @@ async function checkUrlMarkdownSupport(url: string): Promise<LinkSupportInfo> {
         controller.abort();
       }
     } catch {
+      failed = true;
       result = {
         supportsMarkdown: false,
         contentType: "",
@@ -465,7 +584,20 @@ async function checkUrlMarkdownSupport(url: string): Promise<LinkSupportInfo> {
       };
     }
 
-    markdownSupportCache.set(url, result);
+    const existing = markdownSupportCache.get(url);
+    const failureCount = failed ? Math.min((existing?.failureCount ?? 0) + 1, 8) : 0;
+    const backoffUntil = failed
+      ? now + Math.min(LINK_CHECK_BACKOFF_BASE_MS * 2 ** (failureCount - 1), LINK_CHECK_BACKOFF_MAX_MS)
+      : 0;
+    const expiresAt =
+      now + (result.supportsMarkdown ? LINK_CHECK_TTL_SUCCESS_MS : LINK_CHECK_TTL_NEGATIVE_MS);
+
+    markdownSupportCache.set(url, {
+      ...result,
+      expiresAt,
+      failureCount,
+      backoffUntil,
+    });
     markdownSupportInFlight.delete(url);
     return result;
   })();

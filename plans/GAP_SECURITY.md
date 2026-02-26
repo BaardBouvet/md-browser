@@ -26,53 +26,12 @@ Remaining risk is now mainly operational hardening and persistence reliability.
 
 ## Current gap register
 
-### P1: In-memory mode state can reset on service worker restart
+No critical or high-priority unresolved security gaps remain in the current implementation baseline.
 
-**Observed**
+Residual items are optimization-oriented:
 
-- `markdownTabs` / `bypassedTabs` are in-memory structures.
-- Popup and badge behavior can drift briefly after worker restart.
-
-**Why it matters**
-
-- Inconsistent UX/state signaling.
-- Potential confusion around current mode and controls.
-
-**Recommended action**
-
-- Persist minimal mode state in `storage.session`.
-- Rehydrate state on startup and reconcile with active tab URL.
-
-### P1: Link capability checks still perform active network probing when enabled
-
-**Observed**
-
-- Enabled mode issues HEAD/GET checks for candidate links.
-
-**Why it matters**
-
-- Additional outbound traffic and potential anti-bot friction.
-- Privacy footprint increases when enabled.
-
-**Recommended action**
-
-- Keep default-off (already done).
-- Add stricter budget/rate limiting per tab/time window.
-- Add TTL-based cache/backoff strategy.
-
-### P2: Permission minimization still has room for refinement
-
-**Observed**
-
-- Extension still needs broad `http/https` host coverage for current behavior.
-
-**Why it matters**
-
-- Larger review surface than an `activeTab`-only model.
-
-**Recommended action**
-
-- Evaluate partial migration toward on-demand (`activeTab`) flows for non-core features.
+- Further permission reduction toward a more `activeTab`-first model where feasible.
+- Additional telemetry-free observability for local debugging of negotiation/link checks.
 
 ## Closed items (fixed)
 
@@ -80,9 +39,21 @@ Remaining risk is now mainly operational hardening and persistence reliability.
 - `<all_urls>` host scope.
 - Missing explicit CSP declaration.
 - Link checks default-on privacy posture.
+- In-memory-only runtime mode state.
+- Missing link-check request budget/backoff controls.
+
+## Host access rationale
+
+Current host scope is `http://*/*` and `https://*/*` because core extension behavior depends on:
+
+- request header negotiation on top-level navigation,
+- markdown response detection for page mode,
+- content script rendering on arbitrary markdown-capable sites.
+
+This scope intentionally excludes non-web schemes and is the minimum practical scope for the current architecture.
 
 ## Acceptance criteria for next security checkpoint
 
-- [ ] State persistence added for mode/bypass reliability.
-- [ ] Link-check request budget + backoff implemented.
-- [ ] Host access rationale documented for store review.
+- [x] State persistence added for mode/bypass reliability.
+- [x] Link-check request budget + backoff implemented.
+- [x] Host access rationale documented for store review.
