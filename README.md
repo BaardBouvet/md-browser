@@ -15,6 +15,7 @@ Markdown Browser asks sites for `text/markdown` and renders a distraction-free r
 
 - Markdown-first browsing via HTTP content negotiation
 - Clean reader rendering with optimized typography
+- Follows your browser/system dark mode theme automatically
 - Table of contents sidebar for document navigation
 - GitHub-style heading anchor links on hover
 - Link capability hints with optional background checks
@@ -44,6 +45,8 @@ Load the extension:
 ## Link checks
 
 `Link checks` is a popup setting that controls link capability hints in reader mode.
+
+Default is **off** for privacy.
 
 - When enabled, the extension sends lightweight background checks for links on the current markdown page.
 - Links are then marked as likely markdown-capable or non-markdown.

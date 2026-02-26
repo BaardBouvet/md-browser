@@ -17,7 +17,7 @@ async function init() {
   const updateLinkChecksHelpText = (enabled: boolean) => {
     linkChecksHelp.textContent = enabled
       ? "Enabled: the extension checks links in reader mode and labels likely markdown targets."
-      : "Disabled: no background link checks are made, and link capability labels are hidden.";
+      : "Disabled (default for privacy): no background link checks are made, and link capability labels are hidden.";
   };
 
   // Get current tab
