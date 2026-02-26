@@ -1,0 +1,12 @@
+{
+  "name": "md-browser",
+  "image": "node:22-bookworm-slim",
+  "postCreateCommand": "npm install",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint"
+      ]
+    }
+  }
+}

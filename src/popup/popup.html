@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>md-browser</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup">
+    <header class="popup-header">
+      <h1>md-browser</h1>
+    </header>
+
+    <div class="popup-body">
+      <div class="status-row">
+        <span class="status-label">Page source</span>
+        <span class="status-value" id="source-type">Checking…</span>
+      </div>
+      <div class="status-row" id="tokens-row" hidden>
+        <span class="status-label">Tokens</span>
+        <span class="status-value" id="tokens-value">—</span>
+      </div>
+      <div class="status-row" id="url-row" hidden>
+        <span class="status-label">URL</span>
+        <span class="status-value status-url" id="page-url">—</span>
+      </div>
+    </div>
+
+    <div class="popup-actions">
+      <button id="btn-toggle" class="btn" hidden>View original</button>
+    </div>
+
+    <footer class="popup-footer">
+      <span>v0.1.0 — MVP</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

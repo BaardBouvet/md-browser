@@ -1,0 +1,462 @@
+/* ─── md-browser: Reader View Typography ─────────────────────────────────── */
+/* Optimised for readability. Centered column, generous whitespace, system    */
+/* font stack, dark/light themes via prefers-color-scheme + data-attribute.   */
+/* ──────────────────────────────────────────────────────────────────────────── */
+
+/* ─── Theme Variables ─────────────────────────────────────────────────────── */
+
+:root,
+.md-reader-root {
+  --md-bg: #ffffff;
+  --md-text: #1a1a1a;
+  --md-text-secondary: #555555;
+  --md-text-muted: #888888;
+  --md-border: #e5e5e5;
+  --md-code-bg: #f4f5f7;
+  --md-code-text: #d63384;
+  --md-code-block-bg: #f8f9fa;
+  --md-code-block-text: #1a1a1a;
+  --md-link: #2563eb;
+  --md-link-hover: #1d4ed8;
+  --md-blockquote-border: #d1d5db;
+  --md-blockquote-bg: transparent;
+  --md-blockquote-text: #4b5563;
+  --md-table-border: #d1d5db;
+  --md-table-stripe: #f9fafb;
+  --md-badge-bg: #27ae60;
+  --md-badge-text: #ffffff;
+  --md-footer-bg: #f9fafb;
+  --md-footer-border: #e5e5e5;
+  --md-hr: #e5e5e5;
+  --md-selection-bg: #bfdbfe;
+  --md-kbd-bg: #f3f4f6;
+  --md-kbd-border: #d1d5db;
+}
+
+/* ─── Dark Theme ──────────────────────────────────────────────────────────── */
+
+@media (prefers-color-scheme: dark) {
+  :root,
+  .md-reader-root:not([data-theme="light"]) {
+    --md-bg: #181a1b;
+    --md-text: #d4d4d4;
+    --md-text-secondary: #a0a0a0;
+    --md-text-muted: #707070;
+    --md-border: #2e2e2e;
+    --md-code-bg: #2a2a2a;
+    --md-code-text: #f0a6ca;
+    --md-code-block-bg: #1e1e1e;
+    --md-code-block-text: #d4d4d4;
+    --md-link: #60a5fa;
+    --md-link-hover: #93bbfd;
+    --md-blockquote-border: #4b5563;
+    --md-blockquote-bg: #1f2937;
+    --md-blockquote-text: #9ca3af;
+    --md-table-border: #374151;
+    --md-table-stripe: #1f2937;
+    --md-badge-bg: #27ae60;
+    --md-badge-text: #ffffff;
+    --md-footer-bg: #1e1e1e;
+    --md-footer-border: #2e2e2e;
+    --md-hr: #333333;
+    --md-selection-bg: #1e3a5f;
+    --md-kbd-bg: #2a2a2a;
+    --md-kbd-border: #444444;
+  }
+}
+
+/* Manual dark override */
+.md-reader-root[data-theme="dark"] {
+  --md-bg: #181a1b;
+  --md-text: #d4d4d4;
+  --md-text-secondary: #a0a0a0;
+  --md-text-muted: #707070;
+  --md-border: #2e2e2e;
+  --md-code-bg: #2a2a2a;
+  --md-code-text: #f0a6ca;
+  --md-code-block-bg: #1e1e1e;
+  --md-code-block-text: #d4d4d4;
+  --md-link: #60a5fa;
+  --md-link-hover: #93bbfd;
+  --md-blockquote-border: #4b5563;
+  --md-blockquote-bg: #1f2937;
+  --md-blockquote-text: #9ca3af;
+  --md-table-border: #374151;
+  --md-table-stripe: #1f2937;
+  --md-footer-bg: #1e1e1e;
+  --md-footer-border: #2e2e2e;
+  --md-hr: #333333;
+  --md-selection-bg: #1e3a5f;
+  --md-kbd-bg: #2a2a2a;
+  --md-kbd-border: #444444;
+}
+
+/* ─── Base Reset ──────────────────────────────────────────────────────────── */
+
+.md-reader-root {
+  margin: 0;
+  padding: 0;
+  -webkit-text-size-adjust: 100%;
+}
+
+.md-reader-root,
+.md-reader-root body {
+  background-color: var(--md-bg);
+  color: var(--md-text);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  font-size: 18px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--md-selection-bg);
+}
+
+/* ─── Container ───────────────────────────────────────────────────────────── */
+
+.md-reader-container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 6rem;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .md-reader-container {
+    padding: 1.25rem 1rem 5rem;
+  }
+
+  .md-reader-root,
+  .md-reader-root body {
+    font-size: 16px;
+  }
+}
+
+/* ─── Header / Meta ───────────────────────────────────────────────────────── */
+
+.md-reader-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--md-border);
+  flex-wrap: wrap;
+}
+
+.md-reader-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--md-badge-bg);
+  color: var(--md-badge-text);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.md-reader-url {
+  font-size: 0.8rem;
+  color: var(--md-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.md-reader-description {
+  color: var(--md-text-secondary);
+  font-size: 1rem;
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+/* ─── Article Content ─────────────────────────────────────────────────────── */
+
+.md-reader-content {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Headings */
+.md-reader-content h1,
+.md-reader-content h2,
+.md-reader-content h3,
+.md-reader-content h4,
+.md-reader-content h5,
+.md-reader-content h6 {
+  color: var(--md-text);
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 2em;
+  margin-bottom: 0.75em;
+}
+
+.md-reader-content h1 {
+  font-size: 2em;
+  margin-top: 0;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--md-border);
+}
+
+.md-reader-content h2 {
+  font-size: 1.5em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--md-border);
+}
+
+.md-reader-content h3 {
+  font-size: 1.25em;
+}
+
+.md-reader-content h4 {
+  font-size: 1.1em;
+}
+
+.md-reader-content h5 {
+  font-size: 1em;
+}
+
+.md-reader-content h6 {
+  font-size: 0.9em;
+  color: var(--md-text-secondary);
+}
+
+/* Paragraphs */
+.md-reader-content p {
+  margin: 0 0 1.25em;
+}
+
+/* Links */
+.md-reader-content a {
+  color: var(--md-link);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+
+.md-reader-content a:hover {
+  color: var(--md-link-hover);
+  border-bottom-color: var(--md-link-hover);
+}
+
+/* Bold / Italic */
+.md-reader-content strong {
+  font-weight: 700;
+}
+
+.md-reader-content em {
+  font-style: italic;
+}
+
+/* Lists */
+.md-reader-content ul,
+.md-reader-content ol {
+  margin: 0 0 1.25em;
+  padding-left: 2em;
+}
+
+.md-reader-content li {
+  margin-bottom: 0.35em;
+}
+
+.md-reader-content li > p {
+  margin-bottom: 0.5em;
+}
+
+.md-reader-content ul ul,
+.md-reader-content ol ol,
+.md-reader-content ul ol,
+.md-reader-content ol ul {
+  margin-bottom: 0;
+}
+
+/* Task lists */
+.md-reader-content .task-list-item {
+  list-style-type: none;
+  margin-left: -1.5em;
+}
+
+.md-reader-content .task-list-item input[type="checkbox"] {
+  margin-right: 0.5em;
+  vertical-align: middle;
+}
+
+/* Inline code */
+.md-reader-content code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.875em;
+  background: var(--md-code-bg);
+  color: var(--md-code-text);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  word-break: break-word;
+}
+
+/* Code blocks */
+.md-reader-content pre {
+  background: var(--md-code-block-bg);
+  border: 1px solid var(--md-border);
+  border-radius: 6px;
+  padding: 1em 1.25em;
+  overflow-x: auto;
+  margin: 0 0 1.5em;
+  line-height: 1.5;
+}
+
+.md-reader-content pre code {
+  background: none;
+  color: var(--md-code-block-text);
+  padding: 0;
+  border-radius: 0;
+  font-size: 0.85em;
+  word-break: normal;
+}
+
+/* Blockquotes */
+.md-reader-content blockquote {
+  margin: 0 0 1.25em;
+  padding: 0.5em 1em;
+  border-left: 4px solid var(--md-blockquote-border);
+  background: var(--md-blockquote-bg);
+  color: var(--md-blockquote-text);
+}
+
+.md-reader-content blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* Horizontal rules */
+.md-reader-content hr {
+  border: none;
+  border-top: 2px solid var(--md-hr);
+  margin: 2em 0;
+}
+
+/* Images */
+.md-reader-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin: 0.5em 0;
+}
+
+/* Tables */
+.md-reader-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 1.5em;
+  font-size: 0.9em;
+  overflow-x: auto;
+  display: block;
+}
+
+.md-reader-content thead th {
+  background: var(--md-table-stripe);
+  font-weight: 700;
+  text-align: left;
+  padding: 0.6em 0.75em;
+  border-bottom: 2px solid var(--md-table-border);
+}
+
+.md-reader-content tbody td {
+  padding: 0.5em 0.75em;
+  border-bottom: 1px solid var(--md-table-border);
+}
+
+.md-reader-content tbody tr:nth-child(even) {
+  background: var(--md-table-stripe);
+}
+
+/* Definition lists */
+.md-reader-content dt {
+  font-weight: 700;
+  margin-top: 1em;
+}
+
+.md-reader-content dd {
+  margin-left: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+/* Kbd */
+.md-reader-content kbd {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.85em;
+  background: var(--md-kbd-bg);
+  border: 1px solid var(--md-kbd-border);
+  border-radius: 3px;
+  padding: 0.1em 0.4em;
+  box-shadow: 0 1px 0 var(--md-kbd-border);
+}
+
+/* ─── Footer Bar ──────────────────────────────────────────────────────────── */
+
+.md-reader-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1.5rem;
+  background: var(--md-footer-bg);
+  border-top: 1px solid var(--md-footer-border);
+  font-size: 0.75rem;
+  color: var(--md-text-muted);
+  z-index: 10000;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.md-reader-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.md-reader-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.md-reader-footer button {
+  background: none;
+  border: 1px solid var(--md-border);
+  color: var(--md-text-secondary);
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  font-family: inherit;
+}
+
+.md-reader-footer button:hover {
+  background: var(--md-border);
+  color: var(--md-text);
+}
+
+/* ─── Print ───────────────────────────────────────────────────────────────── */
+
+@media print {
+  .md-reader-footer {
+    display: none;
+  }
+
+  .md-reader-container {
+    max-width: 100%;
+    padding-bottom: 1rem;
+  }
+}

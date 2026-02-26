@@ -1,0 +1,20 @@
+{
+  "name": "md-browser",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A reader-first web. Request markdown from servers, render with clean typography.",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "markdown-it": "^14.1.0"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "@types/markdown-it": "^14.1.2",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.0"
+  }
+}

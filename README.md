@@ -1,19 +1,24 @@
 # md-browser
 
-**A browser extension for noise-free, markdown-native web browsing.**
+A reader-first web. Browser extension that requests markdown from servers via HTTP content negotiation and renders everything with clean, distraction-free typography.
 
-The web is bloated. Pages are packed with tracking scripts, pop-ups, cookie banners, auto-playing videos, and layout-shifting ads — all fighting for your attention instead of delivering content. md-browser takes a different approach: it intercepts web requests, asks for markdown, and renders clean, readable content directly in your browser.
+When activated, md-browser adds `Accept: text/markdown` to navigational requests. Sites that support it (e.g. Cloudflare-proxied sites with Markdown for Agents enabled) respond with clean markdown instead of HTML — no ads, no trackers, no noise. The extension renders the markdown with optimised typography directly in your tab.
 
-## The Idea
+## Status
 
-Cloudflare's [Markdown for Agents](https://blog.cloudflare.com/markdown-for-agents/) introduced a simple but powerful mechanism: any site behind Cloudflare can serve its content as structured markdown via HTTP content negotiation. When a client sends `Accept: text/markdown`, compliant servers return clean, readable markdown instead of bloated HTML.
+**v0.1.0 — MVP / Proof of Concept**
 
-md-browser is a browser extension built around this primitive:
-
-1. **Requests markdown first** — modifies outgoing `Accept` headers to prefer `text/markdown` when the extension is active
-2. **Renders markdown natively** — when a server responds with `text/markdown`, the content is rendered with beautiful, distraction-free typography in a reader view
-3. **Converts HTML as fallback** — on any page, the user can activate a reader mode that strips the page to its content and renders it as markdown
-4. **One click to toggle** — switch between the full website and the clean markdown view instantly
+- [x] Chrome Manifest V3 extension
+- [x] Modifies `Accept` headers to request `text/markdown`
+- [x] Detects `text/markdown` responses and renders them in a reader view
+- [x] YAML frontmatter extraction (title, description)
+- [x] Clean typography with dark/light theme (follows system preference)
+- [x] Extension popup showing page source type and token count
+- [x] "View original" to bypass and see the HTML version
+- [x] Badge indicator (`MD`) on tabs served as markdown
+- [ ] HTML-to-markdown fallback (Milestone 2)
+- [ ] Settings / options page (Milestone 3)
+- [ ] Firefox support (Milestone 4)
 
 ## Why an Extension?
 
@@ -59,28 +64,59 @@ You get noise-free reading when you want it, and the full web when you need it.
 - **Readability** — typography, spacing, and contrast are optimized for long-form reading
 - **Progressive enhancement** — sites with `text/markdown` support get the best experience; everything else still works via HTML-to-markdown conversion
 
-## Status
+## Development
 
-This project is in the planning phase. See [`plans/`](plans/) for the roadmap and [`docs/`](docs/) for technical documentation.
+### Prerequisites
+
+- Docker (no local Node.js required)
+
+### Build
+
+```bash
+# Install dependencies
+./dev.sh install
+
+# Build the extension
+./dev.sh build
+
+# Watch mode (rebuild on changes)
+./dev.sh watch
+
+# Drop into a shell inside the container
+./dev.sh shell
+```
+
+### Load in Chrome
+
+1. Build the extension (see above)
+2. Open `chrome://extensions/`
+3. Enable **Developer mode** (toggle in top-right)
+4. Click **Load unpacked**
+5. Select the `dist/` directory
+
+### Test it
+
+Navigate to any Cloudflare-proxied site that has Markdown for Agents enabled, for example:
+
+- https://blog.cloudflare.com/markdown-for-bots/
+- https://developers.cloudflare.com/
+
+The page should render as clean markdown with a green `MD` badge on the extension icon.
 
 ## Project Structure
 
 ```
-md-browser/
-├── README.md              # This file
-├── plans/
-│   ├── 01-overview.md     # Project overview and goals
-│   ├── 02-architecture.md # Extension architecture
-│   ├── 03-milestones.md   # Development milestones and roadmap
-│   └── 04-ux.md           # User experience design
-├── docs/
-│   ├── content-negotiation.md  # How markdown content negotiation works
-│   ├── rendering-pipeline.md   # The markdown rendering pipeline
-│   ├── fallback-conversion.md  # HTML-to-markdown fallback strategy
-│   └── privacy-model.md        # Privacy and security model
-└── src/                   # (future) Source code
+src/
+  background.ts       — Service worker: header modification, response detection
+  content.ts          — Content script: markdown rendering, reader view
+  manifest.json       — Chrome MV3 extension manifest
+  styles/reader.css   — Reader view typography (light/dark themes)
+  popup/              — Extension popup (HTML, CSS, TS)
+dist/                 — Built extension (load this in Chrome)
+docs/                 — Technical documentation
+plans/                — Development plan and milestones
 ```
 
 ## License
 
-TBD
+MIT
