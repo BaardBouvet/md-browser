@@ -275,6 +275,7 @@ api.runtime.onMessage.addListener(
         const info = tabId != null ? markdownTabs.get(tabId) : undefined;
         sendResponse({
           isMarkdown: !!info,
+          isBypassed: tabId != null ? bypassedTabs.has(tabId) : false,
           url: info?.url,
           tokens: info?.tokens,
           contentType: info?.contentType,
@@ -449,7 +450,7 @@ action.onClicked.addListener(async (tab) => {
     await removeBypass(tab.id);
   }
 
-  await api.tabs.reload(tab.id);
+  await api.tabs.reload(tab.id, { bypassCache: true });
 });
 
 function tabLinkCheckBudgetRemaining(tabId: number | undefined): number {

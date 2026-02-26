@@ -4,6 +4,14 @@ Read the web in clean markdown.
 
 Markdown Browser asks sites for `text/markdown` and renders a distraction-free reading view with typography designed for long-form content.
 
+## Why now
+
+Cloudflare recently announced markdown delivery for web content negotiation (often referred to as Markdown for Bots/Agents). That makes markdown-first browsing practical on real public sites today.
+
+Try it on a Cloudflare property:
+
+- https://blog.cloudflare.com/markdown-for-bots/
+
 ## Why use it
 
 - Cleaner pages with less visual noise

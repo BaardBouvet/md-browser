@@ -29,7 +29,12 @@ const md = new MarkdownIt({
   (window as unknown as Record<string, boolean>).__mdBrowserInit = true;
 
   // Primary detection: the browser exposes the MIME type of the response
-  const isMarkdown = document.contentType.includes("text/markdown");
+  const contentType = (document.contentType || "").toLowerCase();
+  const isMarkdown = contentType.includes("text/markdown");
+  const isAmbiguousPlainText =
+    contentType === "" ||
+    contentType.startsWith("text/plain") ||
+    contentType === "application/octet-stream";
 
   // Reduce raw-markdown flash by hiding the document as early as possible.
   if (isMarkdown && document.documentElement) {
@@ -37,14 +42,23 @@ const md = new MarkdownIt({
   }
 
   // Secondary detection: ask the background service worker
-  let bgInfo: { isMarkdown?: boolean; tokens?: string } = {};
+  let bgInfo: { isMarkdown?: boolean; isBypassed?: boolean; tokens?: string } = {};
   try {
     bgInfo = await api.runtime.sendMessage({ type: "CHECK_MARKDOWN" });
   } catch {
     // Background may not be ready (e.g., service worker still starting)
   }
 
-  if (!isMarkdown && !bgInfo?.isMarkdown) {
+  if (bgInfo?.isBypassed) {
+    if (document.documentElement) {
+      document.documentElement.style.visibility = "";
+    }
+    return;
+  }
+
+  const shouldTreatAsMarkdown = isMarkdown || (isAmbiguousPlainText && !!bgInfo?.isMarkdown);
+
+  if (!shouldTreatAsMarkdown) {
     if (document.documentElement) {
       document.documentElement.style.visibility = "";
     }

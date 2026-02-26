@@ -109,7 +109,7 @@ async function init() {
           type: "BYPASS_TAB",
           tabId: tab.id,
         });
-        await api.tabs.reload(tab.id!);
+        await api.tabs.reload(tab.id!, { bypassCache: true });
         window.close();
       });
     } else {
@@ -119,7 +119,7 @@ async function init() {
           type: "REMOVE_BYPASS",
           tabId: tab.id,
         });
-        await api.tabs.reload(tab.id!);
+        await api.tabs.reload(tab.id!, { bypassCache: true });
         window.close();
       });
     }
